@@ -1,0 +1,23 @@
+#input 0
+source 2000 0 0 0
+path G4Sim/rootfiles/PS
+run 0 49
+nevt -1
+
+#input 1
+source 2000 0 0 -400
+path G4Sim/rootfiles/PS_back
+run 0 49
+nevt -1
+
+#input 2
+source 2000 0 0 0
+path G4Sim/rootfiles/PS
+run 50 999
+nevt -1
+
+#input 3
+source 2000 0 0 -400
+path G4Sim/rootfiles/PS_back
+run 50 299
+nevt -1
