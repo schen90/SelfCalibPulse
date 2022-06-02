@@ -36,6 +36,8 @@ using namespace std;
 #define GridDist 2. // 2mm grid
 #define GridMaxSteps 50
 #define MaxNDets 180
+#define NSli 6
+#define NSec 6
 #define NSeg 36
 #define NSegCore 37
 #define NSeg_comp 6

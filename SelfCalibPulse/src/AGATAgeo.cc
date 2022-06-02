@@ -21,17 +21,19 @@ AGATAgeo::AGATAgeo(){
 			"G4Sim/pulsedb/pulseB.root",
 			"G4Sim/pulsedb/pulseC.root"};
   for(int itype=0; itype<NType; itype++){
-    GridRange[itype][0][0] = -40.250;    GridRange[itype][0][1] = 39.750;
-    GridRange[itype][1][0] = -40.250;    GridRange[itype][1][1] = 39.750;
-    GridRange[itype][2][0] = 2.250;      GridRange[itype][2][1] = 90.250;
+    //GridRange[itype][0][0] = -40.250;    GridRange[itype][0][1] = 39.750;
+    //GridRange[itype][1][0] = -40.250;    GridRange[itype][1][1] = 39.750;
+    //GridRange[itype][2][0] = 2.250;      GridRange[itype][2][1] = 90.250;
 
     LoadGrid(itype, gridfile[itype]);
   }
 
   NDets = 0;
   LoadMatrix("LookUp/CrystalPositionLookUpTable");
-  LoadNextSegTable("LookUp/NextSegTable");
-  LoadSegPos("LookUp/SegPosTable");
+  MakeSegmentMap();
+  //LoadNextSegTable("LookUp/NextSegTable");
+  MakeSegPos();
+  //LoadSegPos("LookUp/SegPosTable");
 
 }
 
@@ -51,6 +53,11 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
     for(int iy=0; iy<GridMaxSteps; iy++)
       for(int iz=0; iz<GridMaxSteps; iz++)
 	gridimap[itype][ix][iy][iz] = -1;
+
+  for(int iseg=0; iseg<NSeg; iseg++){
+    NSegGrid[itype][iseg] = 0;
+    LocalSegPos[itype][iseg].ResizeTo(3,1); LocalSegPos[itype][iseg].Zero();
+  }
   
   TTree *gridtree = (TTree *)fgrid->Get("tree");
 
@@ -61,6 +68,26 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
   gridtree->SetBranchAddress("pos",gridposi);
   int npoint = gridtree->GetEntriesFast();
 
+  // find grid range
+  GridRange[itype][0][0] = GridRange[itype][1][0] = GridRange[itype][2][0] = 999;
+  GridRange[itype][0][1] = GridRange[itype][1][1] = GridRange[itype][2][1] = -999;
+  for(int ipoint=0; ipoint<npoint; ipoint++){
+    gridtree->GetEntry(ipoint);
+    if(gridposi[0]<GridRange[itype][0][0]) GridRange[itype][0][0] = gridposi[0];
+    if(gridposi[0]>GridRange[itype][0][1]) GridRange[itype][0][1] = gridposi[0];
+
+    if(gridposi[1]<GridRange[itype][1][0]) GridRange[itype][1][0] = gridposi[1];
+    if(gridposi[1]>GridRange[itype][1][1]) GridRange[itype][1][1] = gridposi[1];
+
+    if(gridposi[2]<GridRange[itype][2][0]) GridRange[itype][2][0] = gridposi[2];
+    if(gridposi[2]>GridRange[itype][2][1]) GridRange[itype][2][1] = gridposi[2];
+  }
+  cout<<"type "<<itype<<" : "
+      <<Form("x %.3f ~ %.3f ; ",GridRange[itype][0][0],GridRange[itype][0][0])
+      <<Form("y %.3f ~ %.3f ; ",GridRange[itype][1][0],GridRange[itype][1][0])
+      <<Form("z %.3f ~ %.3f",GridRange[itype][2][0],GridRange[itype][2][0])<<endl;
+
+  
   TMatrixD tmppos(3,1);
   int idx[3];
   for(int ipoint=0; ipoint<npoint; ipoint++){
@@ -77,9 +104,18 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
 
     GridSeg[itype].push_back(gridsegi-1); //seg in db start from 1...
     gridimap[itype][idx[0]][idx[1]][idx[2]] = ipoint;
+
+    LocalSegPos[itype][gridsegi-1] = LocalSegPos[itype][gridsegi-1] + tmppos;
+    NSegGrid[itype][gridsegi-1]++;
   }
 
   cout<<"load "<<npoint<<" points from "<<gridfile<<" for type "<<itype<<endl;
+
+  for(int iseg=0; iseg<NSeg; iseg++){
+    if(NSegGrid[itype][iseg]>0)
+      LocalSegPos[itype][iseg] = 1./NSegGrid[itype][iseg] * LocalSegPos[itype][iseg];
+  }
+
   fgrid->Close();
 
   return;
@@ -140,6 +176,23 @@ TMatrixD AGATAgeo::Det2LabPos(Int_t idet, TMatrixD DetPos){
 }
 
 
+void AGATAgeo::MakeSegPos(){
+  cout<<"Make Segment Center Position..";
+
+  int detid, segid;
+  for(int detid=0; detid<NDets; detid++){
+    int itype = detid%3;
+    for(int iseg=0; iseg<NSeg; iseg++){
+      SegPos[detid][iseg].ResizeTo(3,1);
+      SegPos[detid][iseg] = Det2LabPos(detid,LocalSegPos[itype][iseg]);
+    }
+  }
+  
+  cout<<endl;
+  return;
+}
+
+
 void AGATAgeo::LoadSegPos(string SegPosTable){
   // find input SegPosTable
   ifstream fin;
@@ -161,6 +214,72 @@ void AGATAgeo::LoadSegPos(string SegPosTable){
   fin.close();
   cout<<"read position for "<<NDets<<" detectors"<<endl;
   
+  return;
+}
+
+
+void AGATAgeo::MakeSegmentMap(){
+  cout<<"Make Segment Map..";
+  //cout<<"\e[1;32m assign weight for comparison hitseg-1, core-1, nxsec-1, nxsli-1 \e[0m"<<endl;
+  for(int iseg=0; iseg<NSeg; iseg++){
+    NextSec[iseg][0] = NextSec[iseg][1] = -1;
+    NextSli[iseg][0] = NextSli[iseg][1] = -1;
+    int NextSli2 = -1;
+    
+    int isec = iseg/NSli;
+    int isli = iseg%NSli;
+
+    for(int jseg=0; jseg<NSeg; jseg++){
+
+      if(jseg==iseg) continue;
+
+      int jsec = jseg/NSli;
+      int jsli = jseg%NSli;
+
+      int distV = abs(jsli - isli);
+      int distH = abs(jsec - isec);
+      distH = min(distH, abs(jsec - isec + NSec));
+      distH = min(distH, abs(jsec - isec - NSec));
+
+      if(distV==0 && distH==1){
+	if(NextSec[iseg][0]<0) NextSec[iseg][0] = jseg;
+	else                   NextSec[iseg][1] = jseg;
+      }
+
+      if(distH==0 && distV==1){
+	if(NextSli[iseg][0]<0) NextSli[iseg][0] = jseg;
+	else                   NextSli[iseg][1] = jseg;
+      }
+      if(distH==0 && distV==2) NextSli2 = jseg;
+    }
+
+    if(NextSli[iseg][1]<0) NextSli[iseg][1] = NextSli2;
+  }
+
+  cout<<endl;
+
+  cout<<"assign segment weight..";
+  // assign weight for comparison
+  //cout<<"\e[1;32m assign weight for comparison hitseg-1, core-1, nxsec-1, nxsli-1 \e[0m"<<endl;
+  for(int iseg=0; iseg<NSeg; iseg++){
+    /*
+    for(int iiseg=0; iiseg<NSeg; iiseg++)
+      SegWeight[iseg][iiseg] = 0;
+
+    SegWeight[iseg][iseg] = 1;
+    SegWeight[iseg][NSegCore-1] = 1;
+    SegWeight[iseg][NextSec[iseg][0]] = 1;    SegWeight[iseg][NextSec[iseg][1]] = 1;
+    SegWeight[iseg][NextSli[iseg][0]] = 1;    SegWeight[iseg][NextSli[iseg][1]] = 1;
+    */
+
+    for(int iiseg=0; iiseg<NSegCore; iiseg++)
+      SegWeight[iseg][iiseg] = 1;
+
+    //SegWeight[iseg][iseg] = 0; // remove direct hit seg
+    //SegWeight[iseg][NSegCore-1] = 0; // remove core
+  }
+  cout<<endl;
+
   return;
 }
 
