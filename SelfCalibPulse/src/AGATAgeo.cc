@@ -83,9 +83,9 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
     if(gridposi[2]>GridRange[itype][2][1]) GridRange[itype][2][1] = gridposi[2];
   }
   cout<<"type "<<itype<<" : "
-      <<Form("x %.3f ~ %.3f ; ",GridRange[itype][0][0],GridRange[itype][0][0])
-      <<Form("y %.3f ~ %.3f ; ",GridRange[itype][1][0],GridRange[itype][1][0])
-      <<Form("z %.3f ~ %.3f",GridRange[itype][2][0],GridRange[itype][2][0])<<endl;
+      <<Form("x %.3f ~ %.3f ; ",GridRange[itype][0][0],GridRange[itype][0][1])
+      <<Form("y %.3f ~ %.3f ; ",GridRange[itype][1][0],GridRange[itype][1][1])
+      <<Form("z %.3f ~ %.3f",GridRange[itype][2][0],GridRange[itype][2][1])<<endl;
 
   
   TMatrixD tmppos(3,1);
