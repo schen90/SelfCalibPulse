@@ -124,6 +124,7 @@ private:
   
   PS GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift);
   PS GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift, bool skipPS);
+  PS GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift, bool skipPS, int &segidx);
   atomic_int irun;
   atomic_int ievt;
   atomic<bool> kcout;

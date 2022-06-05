@@ -765,39 +765,38 @@ void AGATA::CombEvtHitsfiles(){
 
 	  if(idx[detid]<0) continue;
 
-	  int imove=0;
-	  while(obj[detid].ientry<iety){
-	    imove++;
+	  while(obj[detid].ientry<=iety){
+
+	    if(iety==obj[detid].ientry){
+	      oconfig = obj[detid].iconfig;
+	      orun = obj[detid].irun;
+	      oentry = obj[detid].ientry;
+	      odet = obj[detid].idet;
+	      oseg = obj[detid].iseg;
+	      for(int id : *obj[detid].ihcid) ovhcid.push_back(id);
+	      odepE = obj[detid].idepE;
+	      for(int ix=0; ix<3; ix++) ocalpos[ix] = obj[detid].icalpos[ix];
+#ifdef REALPOS
+	      for(int ix=0; ix<3; ix++) olabpos[ix] = obj[detid].ilabpos[ix];
+#endif
+#ifdef NOISE
+	      onoiseidx = obj[detid].inoiseidx;
+	      onoiseidxshift = obj[detid].inoiseidxshift;
+#endif
+	      for(int ix=0; ix<3; ix++) osourcepos[ix] = obj[detid].isourcepos[ix];
+	      osourceeng = obj[detid].isourceeng;
+	    
+	      htreeall->Fill();
+	      ovhcid.clear();
+	    }
+
 	    // move to next idx
 	    idx[detid]++;
 	    if(idx[detid]>=Nevts[detid]) break;
 	    htree[detid]->GetEntry(idx[detid]);
-	  }
-	  if(imove>1){ cout<<"move "<<imove<<" times!!!"<<endl;}
-
-	  if(iety==obj[detid].ientry){
-	    oconfig = obj[detid].iconfig;
-	    orun = obj[detid].irun;
-	    oentry = obj[detid].ientry;
-	    odet = obj[detid].idet;
-	    oseg = obj[detid].iseg;
-	    for(int id : *obj[detid].ihcid) ovhcid.push_back(id);
-	    odepE = obj[detid].idepE;
-	    for(int ix=0; ix<3; ix++) ocalpos[ix] = obj[detid].icalpos[ix];
-#ifdef REALPOS
-	    for(int ix=0; ix<3; ix++) olabpos[ix] = obj[detid].ilabpos[ix];
-#endif
-#ifdef NOISE
-	    onoiseidx = obj[detid].inoiseidx;
-	    onoiseidxshift = obj[detid].inoiseidxshift;
-#endif
-	    for(int ix=0; ix<3; ix++) osourcepos[ix] = obj[detid].isourcepos[ix];
-	    osourceeng = obj[detid].isourceeng;
 	    
-	    htreeall->Fill();
-	    ovhcid.clear();
 	  }
-
+	  
 	}
 
       } // end of loop entries

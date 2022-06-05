@@ -656,6 +656,7 @@ void MakeData_AddPS(string inputfile, string outputfile){
       int maxfiredseg = 0;
       int nfireddet = 0;
       int nComptondet = 0;
+      bool kOneSegFired = false;
       for(int idet=0; idet<spulse.size(); idet++){
 
 	int nfiredseg = 0;
@@ -681,6 +682,8 @@ void MakeData_AddPS(string inputfile, string outputfile){
 	  }
 	}// end of loop seg
 
+        if(nfiredseg==1 && nComptonseg==1) kOneSegFired = true;
+	
 	if(nfiredseg>maxfiredseg) maxfiredseg = nfiredseg;
 	if(nfiredseg>0) nfireddet++;
 	if(nComptonseg>0) nComptondet++;
@@ -691,10 +694,11 @@ void MakeData_AddPS(string inputfile, string outputfile){
 	category = 0;
 	//if(maxfiredseg==1 && nfireddet>1) category = 1;
 	if(maxfiredseg==1 && nComptondet>1) category = 1;
-	if(maxfiredseg>1) category = 2;
+	if(maxfiredseg>1 && nComptondet>1 && kOneSegFired) category = 2;
       
 	//if(category>0) tree->Fill(); // fill only evt with >1 seg fired
-	if(category==1) tree->Fill(); // fill only evt with max 1 seg fired in a det, >1 det fired
+	//if(category==1) tree->Fill(); // fill only evt with max 1 seg fired in a det, >1 det fired
+	if(category==1 || category==2) tree->Fill(); //
 
 	//if(category==1) cout<<tmpcout;
       }

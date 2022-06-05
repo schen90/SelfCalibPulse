@@ -234,6 +234,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 
   // get PS in one event-----------------------------------
   vector<PS> fPS;
+  vector<int> fSegIdx;
   vector<int> Nidx;
   vector<int> Nidxshift;
   for(int idet=0; idet<obj[iChain].pdet->size(); idet++){ //loop dets
@@ -246,16 +247,32 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
     tmpnidx = (int)gRandom->Uniform(0,NOISE);
     tmpnidxshift = (int)gRandom->Uniform(0,NOISE/(NSig*NSegCore));
 #endif
-    PS aps = GetAPS(iChain,agata,idet,tmpnidx, tmpnidxshift);
-    if(aps.det<0) return;
+    int segidx = -1;
+    PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift,false,segidx); // aps w/ PS
 
+    if(aps.det<0 && segidx>-1){ // multi-segment fired
+      for(int idx=0; idx<segidx; idx++){
+	PS aps = GetAPS(iChain,agata,idet,-1,0,true,idx); // aps w/o PS
 #ifdef SINGLEHIT
-    if(aps.nhits>1) continue;
+	if(aps.nhits>1) continue;
+#endif
+	fPS.push_back(aps);
+	fSegIdx.push_back(idx);
+	Nidx.push_back(-1);
+	Nidxshift.push_back(0);
+      }
+
+    }else{ // one segment fired
+#ifdef SINGLEHIT
+      if(aps.nhits>1) continue;
 #endif
     
-    fPS.push_back(aps);
-    Nidx.push_back(tmpnidx);
-    Nidxshift.push_back(tmpnidxshift);
+      fPS.push_back(aps);
+      fSegIdx.push_back(segidx);
+      Nidx.push_back(tmpnidx);
+      Nidxshift.push_back(tmpnidxshift);
+    }
+
   }//end of loop dets
 
   
@@ -268,14 +285,28 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 
       if(Detid>-1 && detid==Detid) continue; // get PS for other Dets
 
-      PS aps = GetAPS(iChain,agata,idet,-1,0,true); // aps w/o PS
-      if(aps.det<0) return;
+      int segidx = -1;
+      PS aps = GetAPS(iChain,agata,idet,-1,0,true,segidx); // aps w/o PS
 
+      if(aps.det<0 && segidx>-1){ // multi-segment fired
+	for(int idx=0; idx<segidx; idx++){
+	  PS aps = GetAPS(iChain,agata,idet,-1,0,true,idx); // aps w/o PS
 #ifdef SINGLEHIT
-      if(aps.nhits>1) continue;
+	  if(aps.nhits>1) continue;
 #endif
-    
-      fPS.push_back(aps);
+	  fPS.push_back(aps);
+	  fSegIdx.push_back(idx);
+	}
+
+      }else{ // one segment fired
+#ifdef SINGLEHIT
+	if(aps.nhits>1) continue;
+#endif
+	fPS.push_back(aps);
+	fSegIdx.push_back(segidx);
+
+      }
+
     }//end of loop dets
   }
 
@@ -326,6 +357,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
   for(int i=0; i<fPS.size(); i++){ //loop fPS
 
     if(Detid>-1 && fPS[i].det!=Detid) continue; // one det mode
+    if(fSegIdx[i]>-1) continue; // multi segment fired
     if(uflag[i]!=1) continue;
     vector<int> entrylist;
     double tmpminchi2 = agata->AddPStoPSC(&fPS[i], fHits->at(i), entrylist); // add to pulse shape collection
@@ -684,6 +716,11 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
 }
 
 PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift, bool skipPS){
+  int segidx = -1;
+  return GetAPS(iChain, agata, idet, nidx, nidxshift, skipPS, segidx);
+}
+
+PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift, bool skipPS, int &segidx){
   PS aps;
   aps.det = -1;
   // calc average position
@@ -767,21 +804,28 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
     }
   }
 
-  if(simeng.size()!=1) return aps;// require only 1 seg fired in a det
+  if(segidx<0 && simeng.size()!=1){
+    segidx = simeng.size(); // multi-segment fired
+    return aps;// require only 1 seg fired in a det
+  }
 
+  int idx;
+  if(segidx<0) idx = 0;
+  else         idx = segidx;
+  
   aps.det = obj[iChain].pdet->at(idet);
-  aps.seg = simseg[0];
-  aps.nhits = simnhits[0];
-  for(int jj=0; jj<simhiteng[0].size(); jj++) aps.hiteng.push_back(simhiteng[0][jj]);
-  aps.energy = simeng[0];
+  aps.seg = simseg[idx];
+  aps.nhits = simnhits[idx];
+  for(int jj=0; jj<simhiteng[idx].size(); jj++) aps.hiteng.push_back(simhiteng[idx][jj]);
+  aps.energy = simeng[idx];
 #ifdef REALPOS
   for(int ix=0; ix<3; ix++){
-    aps.labpos[ix] = simlabpos[0][ix];
-    aps.detpos[ix] = simdetpos[0][ix];
+    aps.labpos[ix] = simlabpos[idx][ix];
+    aps.detpos[ix] = simdetpos[idx][ix];
   }
 #endif
 
-  if(skipPS) return aps; // skip PS
+  if(skipPS || segidx>-1) return aps; // skip PS
   
   if(kWithPS){
 #ifdef ADDPS
