@@ -253,6 +253,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
     if(aps.det<0 && segidx>-1){ // multi-segment fired
       for(int idx=0; idx<segidx; idx++){
 	PS aps = GetAPS(iChain,agata,idet,-1,0,true,idx); // aps w/o PS
+        if(aps.det<0) continue;
 #ifdef SINGLEHIT
 	if(aps.nhits>1) continue;
 #endif
@@ -263,10 +264,10 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
       }
 
     }else{ // one segment fired
+      if(aps.det<0) continue;
 #ifdef SINGLEHIT
       if(aps.nhits>1) continue;
 #endif
-    
       fPS.push_back(aps);
       fSegIdx.push_back(segidx);
       Nidx.push_back(tmpnidx);
@@ -291,6 +292,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
       if(aps.det<0 && segidx>-1){ // multi-segment fired
 	for(int idx=0; idx<segidx; idx++){
 	  PS aps = GetAPS(iChain,agata,idet,-1,0,true,idx); // aps w/o PS
+	  if(aps.det<0) continue;
 #ifdef SINGLEHIT
 	  if(aps.nhits>1) continue;
 #endif
@@ -299,6 +301,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 	}
 
       }else{ // one segment fired
+        if(aps.det<0) continue;
 #ifdef SINGLEHIT
 	if(aps.nhits>1) continue;
 #endif
@@ -660,11 +663,9 @@ void TreeReaderPulse::UpdateHCsworker(int iconfig, int run, int iChain, AGATA *a
 #endif
     PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift);
     if(aps.det<0) return;
-
 #ifdef SINGLEHIT
     if(aps.nhits>1) continue;
 #endif
-    
     fPS.push_back(aps);
     ihit++;
   }//end of loop dets
