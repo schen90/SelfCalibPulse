@@ -27,6 +27,7 @@ void help(){
       <<setw(30)<<left<<" -comb"<<" : combine Hit files for every run"<<endl
       <<setw(30)<<left<<" -Fit"<<" : Fit HCs pos"<<endl
       <<setw(30)<<left<<" -loop Ntrack Nfit"<<" : set iterate Ntrack Nfit"<<endl
+      <<setw(30)<<left<<" -scanPS"<<" : scan Pulse Shape for one detector to compare Chi2"<<endl
       <<endl;
   return;
 }
@@ -49,12 +50,14 @@ int main(int argc, char* argv[]){
   bool kPSA        = false;
   bool kComb       = false;
   bool kFit        = false;
-
+  bool kScanPS     = false;
+  
   string configfile;
   int Detid = -1;
   int NFullLoop = 0;
   int NFitLoop = 0;
   string PSCPath = "PSCfiles";
+  int MaxEvts = -1;
 
   if(argc==1){
     help();
@@ -82,6 +85,9 @@ int main(int argc, char* argv[]){
     }else if(TString(argv[i]) == "-loop"){
       NFullLoop = atoi(argv[++i]);
       NFitLoop = atoi(argv[++i]);
+    }else if(TString(argv[i]) == "-scanPS"){
+      kScanPS = true;
+      MaxEvts = atoi(argv[++i]);
     }
 
   }
@@ -115,6 +121,10 @@ int main(int argc, char* argv[]){
 #ifdef NTHREADS2
   if(kFit) cout<<"NthrdsFit - "<<NTHREADS2<<"; ";
 #endif
+
+  if(kScanPS){
+    cout<<"ScanPS ";
+  }
   
   cout<<"\e[0m"<<endl;
 
@@ -147,7 +157,7 @@ int main(int argc, char* argv[]){
   
   // init TreeReader
   TreeReaderPulse* treereader;
-  if(kMakeInit || kGroupPulse){
+  if(kMakeInit || kGroupPulse || kScanPS){
     treereader = new TreeReaderPulse(Detid);
     treereader->Load(configfile);
     treereader->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
@@ -178,6 +188,18 @@ int main(int argc, char* argv[]){
   cout<<Form("Without noise, Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
 #endif
 
+
+  //*****************************************//
+  // Scan PS to determine chi2slimit
+  //*****************************************//
+  if(kScanPS){
+    treereader->ScanPS(agata, MaxEvts);
+    delete treereader;
+    delete agata;
+    time(&stop);
+    printf("\n============ Elapsed time: %.1f seconds =============\n",difftime(stop,start));
+    return 0;
+  }
   
 
   //*****************************************//
