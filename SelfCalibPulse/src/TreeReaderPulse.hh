@@ -41,6 +41,8 @@ public:
   virtual void MakeNoise();
   virtual void LoadNoise();
   
+  virtual void ScanPS(AGATA *agata, int nevts);
+  
   virtual void Init(int iChain);
 
   virtual void GenerateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
