@@ -2449,13 +2449,11 @@ void AGATA::ReadPSAbasis(){
     TTree *dbtree = (TTree *)fdb->Get("tree");
 
     Int_t dbsegi;
-    Double_t dbposi[3];
-    Double_t dbcorei[121];
-    Double_t dbspulsei[4356];
+    Float_t dbposi[3];
+    Float_t dbspulsei[NSig*NSegCore];
 
     dbtree->SetBranchAddress("seg",&dbsegi);
     dbtree->SetBranchAddress("pos",dbposi);
-    dbtree->SetBranchAddress("core",dbcorei);
     dbtree->SetBranchAddress("spulse",dbspulsei);
     int npoint = dbtree->GetEntriesFast();
 
@@ -2463,7 +2461,7 @@ void AGATA::ReadPSAbasis(){
     for(int ipoint=0; ipoint<npoint; ipoint++){
       dbtree->GetEntry(ipoint);
 
-      dbsegi = dbsegi-1; // start from 0
+      //dbsegi = dbsegi-1; // start from 0
 
       PSAbasis apsabasis;
       for(int ix=0; ix<3; ix++) apsabasis.pos[ix] = dbposi[ix];
@@ -2478,7 +2476,7 @@ void AGATA::ReadPSAbasis(){
 	for(int isig=0; isig<NSig; isig++){
 	  float tmpamp = 0;
 	  if(iseg<NSeg) tmpamp = dbspulsei[iseg*NSig+isig];
-	  else          tmpamp = dbcorei[isig];
+	  else          tmpamp = dbspulsei[NSeg*NSig+isig];
 
 	  if(tmpamp>0.5) skip=false;
 	  apsabasis.spulse[i][isig] = tmpamp;

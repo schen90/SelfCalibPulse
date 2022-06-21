@@ -743,7 +743,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   for(int i=0; i<obj[iChain].inter->at(idet).size(); i++){
     int interid = obj[iChain].inter->at(idet)[i];
 
-    simseg.push_back(obj[iChain].pseg->at(idet)[i]-1); //pseg start from 1...
+    simseg.push_back(obj[iChain].pseg->at(idet)[i]); //pseg start from 0...
     simnhits.push_back(1);
     vector<float> tmphiteng;
     tmphiteng.push_back(obj[iChain].energy->at(interid));

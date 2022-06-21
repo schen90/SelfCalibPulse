@@ -33,17 +33,18 @@ PSbasis::~PSbasis() {
 void PSbasis::ReadPSbasis(){
 
   cout<<"\e[1;31m Read basis for linear interpolation PS: \e[0m"<<endl;
-  string dbfile[3] = {"G4Sim/pulsedb/pulseA.root",
-		      "G4Sim/pulsedb/pulseB.root",
-		      "G4Sim/pulsedb/pulseC.root"};
+  string dbfile[3] = {"G4Sim/pulsedb/LibTrap_A001.root",
+		      "G4Sim/pulsedb/LibTrap_B001.root",
+		      "G4Sim/pulsedb/LibTrap_C001.root"};
 
   for(int itype=0; itype<NType; itype++){
 
     if(Detid>-1 && itype!=Detid%3) continue;
 
-    range[itype][0][0] = -40.250;    range[itype][0][1] = 39.750;
-    range[itype][1][0] = -40.250;    range[itype][1][1] = 39.750;
-    range[itype][2][0] = 2.250;      range[itype][2][1] = 90.250;
+    for(int ix=0; ix<3; ix++){
+      range[itype][ix][0] = 1000;
+      range[itype][ix][1] = -1000;
+    }
     for(int ix=0; ix<GridMaxSteps; ix++)
       for(int iy=0; iy<GridMaxSteps; iy++)
         for(int iz=0; iz<GridMaxSteps; iz++)
@@ -58,15 +59,21 @@ void PSbasis::ReadPSbasis(){
     TTree *dbtree = (TTree *)fdb->Get("tree");
 
     Int_t dbsegi;
-    Double_t dbposi[3];
-    Double_t dbcorei[121];
-    Double_t dbspulsei[4356];
+    Float_t dbposi[3];
+    Float_t dbspulsei[NSig*NSegCore];
 
     dbtree->SetBranchAddress("seg",&dbsegi);
     dbtree->SetBranchAddress("pos",dbposi);
-    dbtree->SetBranchAddress("core",dbcorei);
     dbtree->SetBranchAddress("spulse",dbspulsei);
     int npoint = dbtree->GetEntriesFast();
+
+    for(int ipoint=0; ipoint<npoint; ipoint++){
+      dbtree->GetEntry(ipoint);
+      for(int ix=0; ix<3; ix++){
+        if(dbposi[ix]<range[itype][ix][0]) range[itype][ix][0] = dbposi[ix];
+        if(dbposi[ix]>range[itype][ix][1]) range[itype][ix][1] = dbposi[ix];
+      }
+    }
 
     TMatrixD tmppos(3,1);
     int idx[3];
@@ -87,9 +94,9 @@ void PSbasis::ReadPSbasis(){
         for(int i=0; i<NSig; i++)
           tmpspulse(iseg*NSig+i,0)=dbspulsei[iseg*NSig+i];
       }
-      for(int i=0; i<NSig; i++) tmpspulse(NSeg*NSig+i,0)=dbcorei[i];
+      for(int i=0; i<NSig; i++) tmpspulse(NSeg*NSig+i,0)=dbspulsei[NSeg*NSig+i];
 
-      dbseg[itype].push_back(dbsegi); // start from 1
+      dbseg[itype].push_back(dbsegi); // start from 0
       dbpos[itype].push_back(tmppos);
       imap[itype][idx[0]][idx[1]][idx[2]] = ipoint;
 

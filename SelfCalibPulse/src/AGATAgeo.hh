@@ -20,7 +20,7 @@ public:
   virtual ~AGATAgeo();
 
   Int_t GetNDets(){ return NDets;}
-  void LoadGrid(Int_t itype, string gridfile = "pulsedb/pulseA.root");
+  void LoadGrid(Int_t itype, string gridfile = "pulsedb/LibTrap_A001.root");
   void LoadMatrix(string LookUpTable = "LookUp/CrystalPositionLookUpTable");
   TMatrixD Lab2DetPos(Int_t idet, TMatrixD LabPos);
   TMatrixD Det2LabPos(Int_t idet, TMatrixD DetPos);
