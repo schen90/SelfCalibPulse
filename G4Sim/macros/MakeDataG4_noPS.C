@@ -1,4 +1,4 @@
-//./macros/MakeDataG4 G4inputfile outputfile
+//./macros/MakeDataG4_noPS G4inputfile outputfile
 
 #include "TRint.h"
 #include "TROOT.h"
@@ -18,9 +18,10 @@
 
 using namespace std;
 
-const int Ntype = 1;
-const int nsig = 121;
+const int Ntype = 3;
+const int nsig = 56;
 const int nseg = 36;
+const int nchan = nseg+1;
 
 double griddist = 2; // 2mm grid
 double range[Ntype][3][2];
@@ -57,12 +58,14 @@ void MakeDataG4_noPS(string G4inputfile, string outputfile){
   vector<Int_t>    dbseg[Ntype];
   vector<TMatrixD> dbpos[Ntype];
 
-  string dbfile[3] = {"pulsedb/pulseA.root","pulsedb/pulseB.root","pulsedb/pulseC.root"};
+  string dbfile[3] = {"pulsedb/LibTrap_A001.root","pulsedb/LibTrap_B001.root","pulsedb/LibTrap_C001.root"};
 
   for(int itype=0; itype<Ntype; itype++){
-    range[itype][0][0] = -40.250;    range[itype][0][1] = 39.750;
-    range[itype][1][0] = -40.250;    range[itype][1][1] = 39.750;
-    range[itype][2][0] = 2.250;      range[itype][2][1] = 90.250;
+    for(int ix=0; ix<3; ix++){
+      range[itype][ix][0] = 1000;
+      range[itype][ix][1] = -1000;
+    }
+
     for(int ix=0; ix<MaxSteps; ix++)
       for(int iy=0; iy<MaxSteps; iy++)
 	for(int iz=0; iz<MaxSteps; iz++)
@@ -77,11 +80,19 @@ void MakeDataG4_noPS(string G4inputfile, string outputfile){
     TTree *dbtree = (TTree *)fdb->Get("tree");
 
     Int_t dbsegi;
-    Double_t dbposi[3];
+    Float_t dbposi[3];
 
     dbtree->SetBranchAddress("seg",&dbsegi);
     dbtree->SetBranchAddress("pos",dbposi);
     int npoint = dbtree->GetEntriesFast();
+
+    for(int ipoint=0; ipoint<npoint; ipoint++){
+      dbtree->GetEntry(ipoint);
+      for(int ix=0; ix<3; ix++){
+        if(dbposi[ix]<range[itype][ix][0]) range[itype][ix][0] = dbposi[ix];
+        if(dbposi[ix]>range[itype][ix][1]) range[itype][ix][1] = dbposi[ix];
+      }
+    }
 
     TMatrixD tmppos(3,1);
     int idx[3];
@@ -248,7 +259,7 @@ void MakeDataG4_noPS(string G4inputfile, string outputfile){
       // find interaction points in each detector
       for(int i=0; i<ndet.size(); i++){
 	int itype = ndet[i]%3;
-	if(itype!=0) continue; // only get pulse db for type 0 det so far
+	//if(itype!=0) continue; // only get pulse db for type 0 det so far
 
 	int id;
 	for(id=0; id<pdet.size(); id++) if(ndet[i]==pdet[id]) break;

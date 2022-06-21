@@ -23,8 +23,9 @@ bool kextrapol = true;
 bool kgridip = true;
 
 const int Ntype = 1;
-const int nsig = 121;
+const int nsig = 56;
 const int nseg = 36;
+const int nchan = nseg+1;
 
 double griddist = 2; // 2mm grid
 double range[Ntype][3][2];
@@ -63,12 +64,14 @@ void MakeDataG4(string G4inputfile, string outputfile){
   vector<TMatrixD> dbcore[Ntype];
   vector<TMatrixD> dbspulse[Ntype];
 
-  string dbfile[3] = {"pulsedb/pulseA.root","pulsedb/pulseB.root","pulsedb/pulseC.root"};
+  string dbfile[3] = {"pulsedb/LibTrap_A001.root","pulsedb/LibTrap_B001.root","pulsedb/LibTrap_C001.root"};
 
   for(int itype=0; itype<Ntype; itype++){
-    range[itype][0][0] = -40.250;    range[itype][0][1] = 39.750;
-    range[itype][1][0] = -40.250;    range[itype][1][1] = 39.750;
-    range[itype][2][0] = 2.250;      range[itype][2][1] = 90.250;
+    for(int ix=0; ix<3; ix++){
+      range[itype][ix][0] = 1000;
+      range[itype][ix][1] = -1000;
+    }
+
     for(int ix=0; ix<MaxSteps; ix++)
       for(int iy=0; iy<MaxSteps; iy++)
         for(int iz=0; iz<MaxSteps; iz++)
@@ -83,16 +86,22 @@ void MakeDataG4(string G4inputfile, string outputfile){
     TTree *dbtree = (TTree *)fdb->Get("tree");
 
     Int_t dbsegi;
-    Double_t dbposi[3];
-    Double_t dbcorei[121];
-    Double_t dbspulsei[4356];
+    Float_t dbposi[3];
+    Float_t dbspulsei[nsig*nchan];
 
     dbtree->SetBranchAddress("seg",&dbsegi);
     dbtree->SetBranchAddress("pos",dbposi);
-    dbtree->SetBranchAddress("core",dbcorei);
     dbtree->SetBranchAddress("spulse",dbspulsei);
     int npoint = dbtree->GetEntriesFast();
 
+    for(int ipoint=0; ipoint<npoint; ipoint++){
+      dbtree->GetEntry(ipoint);
+      for(int ix=0; ix<3; ix++){
+        if(dbposi[ix]<range[itype][ix][0]) range[itype][ix][0] = dbposi[ix];
+        if(dbposi[ix]>range[itype][ix][1]) range[itype][ix][1] = dbposi[ix];
+      }
+    }
+    
     TMatrixD tmppos(3,1);
     int idx[3];
     TMatrixD tmpcore(nsig,1);
@@ -109,7 +118,7 @@ void MakeDataG4(string G4inputfile, string outputfile){
         }
       }
 
-      for(int i=0; i<nsig; i++) tmpcore(i,0)=dbcorei[i];
+      for(int i=0; i<nsig; i++) tmpcore(i,0)=dbspulsei[nseg*nsig+i];
       for(int iseg=0; iseg<nseg; iseg++){
 	for(int i=0; i<nsig; i++)
 	  tmpspulse(iseg*nsig+i,0)=dbspulsei[iseg*nsig+i];
@@ -189,8 +198,8 @@ void MakeDataG4(string G4inputfile, string outputfile){
   vector<vector<int>>      pseg;   // segment id in pulsedb
   vector<vector<int>>      ngrid;  // number of grid found around ppos
   vector<vector<int>>      extrpl; // if use extrapolation
-  vector<vector<float>>    core;   // core pulse shape vector<float(121)> 
-  vector<vector<float>>    spulse; // segment pulse shape vector<float(4356)>
+  vector<vector<float>>    core;   // core pulse shape vector<float(56)> 
+  vector<vector<float>>    spulse; // segment pulse shape vector<float(2016)>
   vector<vector<int>>      gridip; // grid points used for spulse
   vector<vector<float>>    gridwgt; // weight grid points used for spulse
   

@@ -42,10 +42,10 @@ using namespace std;
 #define NSeg 36
 #define NSegCore 37
 #define NSeg_comp 6
-#define NSig 121
-#define NSig_comp 120
-#define LOOP_SSE4_seg 30
-#define LOOP_SSE8_seg 15
+#define NSig 56
+#define NSig_comp 56
+#define LOOP_SSE4_seg 14
+#define LOOP_SSE8_seg 7
 
 //#define SSE_M256
 #define CHI2        1

@@ -17,9 +17,9 @@
 using namespace std;
 
 AGATAgeo::AGATAgeo(){
-  string gridfile[3] = {"G4Sim/pulsedb/pulseA.root",
-			"G4Sim/pulsedb/pulseB.root",
-			"G4Sim/pulsedb/pulseC.root"};
+  string gridfile[3] = {"G4Sim/pulsedb/LibTrap_A001.root",
+			"G4Sim/pulsedb/LibTrap_B001.root",
+			"G4Sim/pulsedb/LibTrap_C001.root"};
   for(int itype=0; itype<NType; itype++){
     //GridRange[itype][0][0] = -40.250;    GridRange[itype][0][1] = 39.750;
     //GridRange[itype][1][0] = -40.250;    GridRange[itype][1][1] = 39.750;
@@ -62,7 +62,7 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
   TTree *gridtree = (TTree *)fgrid->Get("tree");
 
   Int_t gridsegi;
-  Double_t gridposi[3];
+  Float_t gridposi[3];
 
   gridtree->SetBranchAddress("seg",&gridsegi);
   gridtree->SetBranchAddress("pos",gridposi);
@@ -102,11 +102,11 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
       }
     }
 
-    GridSeg[itype].push_back(gridsegi-1); //seg in db start from 1...
+    GridSeg[itype].push_back(gridsegi); //seg in db start from 0...
     gridimap[itype][idx[0]][idx[1]][idx[2]] = ipoint;
 
-    LocalSegPos[itype][gridsegi-1] = LocalSegPos[itype][gridsegi-1] + tmppos;
-    NSegGrid[itype][gridsegi-1]++;
+    LocalSegPos[itype][gridsegi] = LocalSegPos[itype][gridsegi] + tmppos;
+    NSegGrid[itype][gridsegi]++;
   }
 
   cout<<"load "<<npoint<<" points from "<<gridfile<<" for type "<<itype<<endl;

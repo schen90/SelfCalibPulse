@@ -110,8 +110,8 @@ private:
     vector<vector<int>>     *pseg = 0;   // segment id in pulsedb
     vector<vector<int>>     *ngrid = 0;  // number of grid found around ppos
     vector<vector<int>>     *extrpl = 0;  // number of grid for extrapolation
-    vector<vector<float>>   *core = 0;   // core pulse shape vector<float(121)>
-    vector<vector<float>>   *spulse = 0; // segment pulse shape vector<float(4356)>
+    vector<vector<float>>   *core = 0;   // core pulse shape vector<float(56)>
+    vector<vector<float>>   *spulse = 0; // segment pulse shape vector<float(2016)>
 
     int                      category; // 1: max 1 seg fired in a det, >1 det fired; 2: max >1 seg fired in a det
   };
