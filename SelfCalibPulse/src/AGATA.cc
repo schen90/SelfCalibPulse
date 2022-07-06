@@ -2094,6 +2094,7 @@ void AGATA::TrackingLoop(){
 
     // make paths
     if(atrack.size()>1){ // at least two hits
+      int ngoodhit = 0;
       double incE = EGamma;
       double depE = fHits->at(atrack[0])->GetE(); // keV
 
@@ -2101,8 +2102,11 @@ void AGATA::TrackingLoop(){
 #ifdef NTHREADS2
       lock_guard<mutex> lock(Pathsmtx);
 #endif
-      if(fHits->at(atrack[0])->hasHitCollection()>0 ||
-	 fHits->at(atrack[1])->hasHitCollection()>0){ // change to at least one HC
+      ngoodhit = 1; // sourcehit is always good hit
+      if(fHits->at(atrack[0])->hasHitCollection()>3) ngoodhit++;
+      if(fHits->at(atrack[1])->hasHitCollection()>3) ngoodhit++;
+      
+      if(ngoodhit>1){ // at least two good hit
 	Path *apath = new Path(sourcehit,fHits->at(atrack[0]),fHits->at(atrack[1]),
 			       incE, depE, incE, depE);
 	fPaths->push_back(apath);
@@ -2111,9 +2115,13 @@ void AGATA::TrackingLoop(){
       incE = incE - depE;
       for(int i=1; i<atrack.size()-1; i++){ //<--- was atrack.size()-2 ????
 	depE = fHits->at(atrack[i])->GetE(); // keV
-	if(fHits->at(atrack[i-1])->hasHitCollection()>0 ||
-	   fHits->at(atrack[i])->hasHitCollection()>0 ||
-	   fHits->at(atrack[i+1])->hasHitCollection()>0){ // change to at least one HC
+
+	ngoodhit = 0;
+	if(fHits->at(atrack[i-1])->hasHitCollection()>3) ngoodhit++;
+	if(fHits->at(atrack[i]  )->hasHitCollection()>3) ngoodhit++;
+	if(fHits->at(atrack[i+1])->hasHitCollection()>3) ngoodhit++;
+
+	if(ngoodhit>1){ // at least two good hit
 	  Path *apath = new Path(fHits->at(atrack[i-1]),fHits->at(atrack[i]),fHits->at(atrack[i+1]),
 				 incE, depE, incE, depE);
 	  fPaths->push_back(apath);
