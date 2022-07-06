@@ -2103,8 +2103,10 @@ void AGATA::TrackingLoop(){
       lock_guard<mutex> lock(Pathsmtx);
 #endif
       ngoodhit = 1; // sourcehit is always good hit
-      if(fHits->at(atrack[0])->hasHitCollection()>3) ngoodhit++;
-      if(fHits->at(atrack[1])->hasHitCollection()>3) ngoodhit++;
+      //if(fHits->at(atrack[0])->hasHitCollection()>0) ngoodhit++;
+      //if(fHits->at(atrack[1])->hasHitCollection()>0) ngoodhit++;
+      if(fHits->at(atrack[0])->hasgoodHCs(3)>0) ngoodhit++;
+      if(fHits->at(atrack[1])->hasgoodHCs(3)>0) ngoodhit++;
       
       if(ngoodhit>1){ // at least two good hit
 	Path *apath = new Path(sourcehit,fHits->at(atrack[0]),fHits->at(atrack[1]),
@@ -2117,9 +2119,12 @@ void AGATA::TrackingLoop(){
 	depE = fHits->at(atrack[i])->GetE(); // keV
 
 	ngoodhit = 0;
-	if(fHits->at(atrack[i-1])->hasHitCollection()>3) ngoodhit++;
-	if(fHits->at(atrack[i]  )->hasHitCollection()>3) ngoodhit++;
-	if(fHits->at(atrack[i+1])->hasHitCollection()>3) ngoodhit++;
+	//if(fHits->at(atrack[i-1])->hasHitCollection()>0) ngoodhit++;
+	//if(fHits->at(atrack[i]  )->hasHitCollection()>0) ngoodhit++;
+	//if(fHits->at(atrack[i+1])->hasHitCollection()>0) ngoodhit++;
+	if(fHits->at(atrack[i-1])->hasgoodHCs(3)>0) ngoodhit++;
+	if(fHits->at(atrack[i]  )->hasgoodHCs(3)>0) ngoodhit++;
+	if(fHits->at(atrack[i+1])->hasgoodHCs(3)>0) ngoodhit++;
 
 	if(ngoodhit>1){ // at least two good hit
 	  Path *apath = new Path(fHits->at(atrack[i-1]),fHits->at(atrack[i]),fHits->at(atrack[i+1]),
