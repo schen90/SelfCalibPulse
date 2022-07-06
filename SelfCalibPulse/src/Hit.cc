@@ -37,6 +37,15 @@ Hit::~Hit() {
   // do not delete the hitCollections vector
 }
 
+
+Int_t Hit::hasgoodHCs(int thres){
+  int ngoodhcs = 0;
+  for(HitCollection* ahc : *hitCollections)
+    if(ahc->GetSize()>thres) ngoodhcs++;
+  return ngoodhcs;
+}
+
+
 void Hit::CalcAveHCsPosition() {
   if(det<0) return; // skip source hit
 
