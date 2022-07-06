@@ -47,6 +47,12 @@ public:
   }
   vector<HitCollection*>* GetHitCollections(){ return hitCollections;}
   Int_t hasHitCollection(){ return hitCollections->size();}
+  Int_t hasgoodHCs(int thres){
+    int ngoodhcs = 0;
+    for(HitCollection* ahc : *hitCollections)
+      if(ahc->GetSize()>thres) ngoodhcs++;
+    return ngoodhcs;
+  }
 
   Float_t GetE(){ return depE;} // in keV
   
