@@ -54,7 +54,7 @@ public:
   TVector3 GetPosition(){ return TVector3(calpos[0],calpos[1],calpos[2]);}
   TVector3 GetRealPosition(){ return TVector3(labpos[0],labpos[1],labpos[2]);}
 
-  void CalcAveHCsPosition(); // calc. calpos
+  void CalcAveHCsPosition(int thres); // calc. calpos
 
   void SetDetectorID(Int_t val){ det=val;}
   void SetSegmentID(Int_t val){ seg=val;}
