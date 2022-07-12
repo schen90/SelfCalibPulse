@@ -2108,7 +2108,8 @@ void AGATA::TrackingLoop(){
       if(fHits->at(atrack[0])->hasgoodHCs(3)>0) ngoodhit++;
       if(fHits->at(atrack[1])->hasgoodHCs(3)>0) ngoodhit++;
       
-      if(ngoodhit>1){ // at least two good hit
+      //if(ngoodhit>1){ // at least two good hit
+      if(ngoodhit==3){ // three good hit
 	Path *apath = new Path(sourcehit,fHits->at(atrack[0]),fHits->at(atrack[1]),
 			       incE, depE, incE, depE);
 	fPaths->push_back(apath);
@@ -2126,7 +2127,8 @@ void AGATA::TrackingLoop(){
 	if(fHits->at(atrack[i]  )->hasgoodHCs(3)>0) ngoodhit++;
 	if(fHits->at(atrack[i+1])->hasgoodHCs(3)>0) ngoodhit++;
 
-	if(ngoodhit>1){ // at least two good hit
+	//if(ngoodhit>1){ // at least two good hit
+	if(ngoodhit==3){ // three good hit
 	  Path *apath = new Path(fHits->at(atrack[i-1]),fHits->at(atrack[i]),fHits->at(atrack[i+1]),
 				 incE, depE, incE, depE);
 	  fPaths->push_back(apath);
