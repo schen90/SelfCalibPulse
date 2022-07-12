@@ -46,7 +46,7 @@ Int_t Hit::hasgoodHCs(int thres){
 }
 
 
-void Hit::CalcAveHCsPosition() {
+void Hit::CalcAveHCsPosition(int thres) {
   if(det<0) return; // skip source hit
 
   if (unlikely(hitCollections->size() == 0)) {
@@ -64,10 +64,21 @@ void Hit::CalcAveHCsPosition() {
 
   } else {
     TVector3 average(0, 0, 0);
-    for (unsigned int i = 0; i < hitCollections->size(); i++) {
-      average += hitCollections->at(i)->GetPosition();
+    double weight = 0;
+    for(HitCollection* ahc : *hitCollections){
+      if(ahc->GetSize()>thres){
+#define WEIGHT
+#ifndef WEIGHT
+	average += ahc->GetPosition();
+	weight++;
+#else
+	average += ahc->GetPosition() * ahc->GetSize();
+	weight += ahc->GetSize();
+#endif
+      }
     }
-    average *= 1.0 / hitCollections->size();
+    if(weight>0) average *= 1.0 / weight;
+    else         average = hitCollections->at(0)->GetPosition();
     calpos[0] = average.X(); calpos[1] = average.Y(); calpos[2] = average.Z();
     return;
   }

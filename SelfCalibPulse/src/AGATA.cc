@@ -2084,7 +2084,7 @@ void AGATA::TrackingLoop(){
     }
 
     // calc calpos from HCs
-    for(Hit* ahit : *fHits) ahit->CalcAveHCsPosition();
+    for(Hit* ahit : *fHits) ahit->CalcAveHCsPosition(0);
 
     // tracking
     Tracker tracker(fHits, EGamma, sourcepos);
@@ -2222,7 +2222,7 @@ Double_t WrappedEstimator(const double *par){
   Double_t result = 0;
   int Ncounts = 0;
   for(int i=0; i<paths->size(); i++){
-    //phits->at(i)->CalcAveHCsPosition(); // update hits position in paths
+    //phits->at(i)->CalcAveHCsPosition(0); // update hits position in paths
     double change = paths->at(i)->CalcChi2(phits->at(i));
     result += change;
     Ncounts++;
@@ -2366,7 +2366,7 @@ void AGATA::ExecFitLoop(int it){
     aHC->SetFitPosition(fitpos);
     aHC->SetPosition(fitpos);
     vector<Hit*>* phits = aHC->GetPathHits();
-    for(Hit* ah : *phits) ah->CalcAveHCsPosition(); // update hits pos linked with aHC
+    for(Hit* ah : *phits) ah->CalcAveHCsPosition(0); // update hits pos linked with aHC
   }
 
   return;
