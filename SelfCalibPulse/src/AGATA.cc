@@ -2088,8 +2088,8 @@ void AGATA::TrackingLoop(){
 
     // tracking
     Tracker tracker(fHits, EGamma, sourcepos);
-    tracker.OFTtracking();
-    //tracker.Simpletracking();
+    //tracker.OFTtracking();
+    tracker.Simpletracking();
     vector<int> atrack = tracker.GetTrack();
 
     // make paths

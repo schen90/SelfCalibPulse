@@ -24,9 +24,13 @@ public:
   void SetSourcePos(float *posval){ sPos.SetXYZ(posval[0],posval[1],posval[2]);}
   void SetAlfaRed(double val){ alfared = val;}
   void OFTtracking();
-  void Simpletracking();
   double Ftot(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
 	      double etotale, vector<int> &order);
+
+  void Simpletracking();
+  double CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
+		     double etotale, vector<int> &order);
+
   
 private:
   vector<Hit*>* fHits; // Hits from one event
