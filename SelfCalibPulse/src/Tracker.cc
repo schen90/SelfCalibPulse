@@ -500,73 +500,222 @@ void Tracker::OFTtracking(){
 }
 
 
+
+/***********************************************************/
+/**** Simple tracking **************************************/
+/**** energies in MeV and positions in cm ******************/
+/***********************************************************/
+
 Double_t calcComptonAngle(Double_t Ein, Double_t Edep){
-  double ME_keV = mec2*1000;
-  Double_t cosa = 1. + ME_keV / Ein - ME_keV / (Ein - Edep);
+  Double_t cosa = 1. + mec2 / Ein - mec2 / (Ein - Edep);
   if(unlikely( cosa > 1 ))
     cosa = 1;
   else if(unlikely( cosa < -1 ))
     cosa = -1;
 
-  return (180. / TMath::Pi() * acos(cosa));
+  return acos(cosa);
 }
 
-Double_t getAngle(TVector3 v, TVector3 w){
-  return (180. / TMath::Pi() * (v.Angle(w)));
+
+// calculate best min chi2 with iteration for simple tracking
+double Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
+			    double etotale, vector<int> &order){
+  if(order.size()==0){
+    order.push_back(0); // order[0]=0: source
+    return CalcMinChi2(pos,intid,energy,etotale,order);
+  }
+
+  vector<int> bestorder;  bestorder.resize(order.size());
+  vector<int> testorder;  testorder.resize(order.size());
+  for(int i=0; i<order.size(); i++) bestorder[i] = order[i];
+  double minchi2 = DBL_MAX;
+
+  if(order.size()==1){ // order[0]=0: source
+    for(int m=1; m<energy.size(); m++){
+      // next interaction m
+      testorder.resize(order.size());
+      for(int i=0; i<order.size(); i++) testorder[i] = order[i];
+      testorder.push_back(m);
+
+      double chi2test = CalcMinChi2(pos,intid,energy,etotale,testorder);
+
+      if(chi2test<minchi2){
+        minchi2 = chi2test;
+        testorder.swap(bestorder);
+      }
+    }
+
+  }else{ // order.size()>=2
+    int j=order[order.size()-2], l=order[order.size()-1];
+    TVector3 mom01 = pos[l]-pos[j];
+    
+    for(int m=1; m<energy.size(); m++){
+      int skip = 0;
+      for(int i=1; i<order.size(); i++) if(m==order[i]) skip=1;
+      if(skip) continue;
+
+      // next interaction m
+      testorder.resize(order.size());
+      for(int i=0; i<order.size(); i++) testorder[i] = order[i];
+      testorder.push_back(m);
+
+      TVector3 mom12 = pos[m]-pos[l];
+      double angle = mom01.Angle(mom12);
+
+      double cangle = calcComptonAngle(etotale, energy[l]);
+      double escatter = etotale - energy[l];
+
+      // doi:10.1016/j.nima.2004.06.154
+      double chi2test = exp(40. * fabs(cos(cangle) - cos(angle)) );
+
+      if(testorder.size()<energy.size()) // next interaction
+        chi2test += CalcMinChi2(pos,intid,energy,escatter,testorder);
+
+      if(chi2test<minchi2){
+        minchi2 = chi2test;
+        testorder.swap(bestorder);
+      }
+    }
+  }
+
+  order.swap(bestorder);
+  bestorder.clear();
+  testorder.clear();
+  return minchi2;
 }
+
 
 void Tracker::Simpletracking(){
   if(nhits<2) return;
-  
-  double incE = EGamma;
-  TVector3 pos0 = sPos;
-  TVector3 pos1;
-  TVector3 pos2;
-  int inter0, inter1, inter2;
-  double mindiff = 180;
+
+  //******** computing all angle between interactions ********
+  for(int i=0; i<nhits; i++){
+    thetatest[i][i] = PI;
+
+    for(int j=i+1; j<nhits; j++){	
+      thetatest[i][j] = Pos[i].Angle(Pos[j]);
+      thetatest[j][i] = thetatest[i][j];
+    }
+  }
+    
+  //******** find cluster ********
+  vector<double> et;
+  vector<vector<int>> sn(MaxNDets);
   int flagu[MaxNDets];
-  for(int i=0; i<nhits; i++) flagu[i]=0;
 
-  for(int i1=0; i1<nhits; i1++){
-    if(flagu[i1]!=0) continue;
-    for(int i2=0; i2<nhits; i2++){
-      if(i1==i2 || flagu[i2]!=0) continue;
-      pos1 = Pos[i1];
-      pos2 = Pos[i2];
-
-      double comptonAng = calcComptonAngle(incE,e[i1]);
-      double foundAng = getAngle(pos1 - pos0, pos2 - pos1);
-      double diff = fabs(foundAng - comptonAng);
-      if(diff<mindiff){
-	mindiff = diff;
-	inter1 = i1;
-	inter2 = i2;
-      }
-    }
+#ifdef ONECLUST // put all hits in one cluster
+  et.push_back(0);
+  sn[0].clear();
+  for(int i=0; i<nhits; i++){
+    sn[0].push_back(i);
+    et[0] += e[i];
   }
+  int n = et.size();
 
-  track.push_back(inter1);  flagu[inter1] = 1;
-  track.push_back(inter2);  flagu[inter2] = 1;
+#else // make cluster by angle
+  double power = pow((nhits+2)/3., 0.9);
+  double alfamax = acos(1-2./power)/alfared;
 
-  while(track.size()<nhits){
-    incE -= e[inter1];
-    inter0 = inter1;  pos0 = Pos[inter0];
-    inter1 = inter2;  pos1 = Pos[inter1];
+  int n = et.size(); // counter of cluster
+  for(double alfa=alfamin; alfa<alfamax; alfa+=deltaalfa){
+    for(int i=0; i<nhits; i++) flagu[i]=0;
 
-    mindiff = 180;
-    double comptonAng = calcComptonAngle(incE,e[inter1]);
-    for(int i2=0; i2<nhits; i2++){
-      if(flagu[i2]!=0) continue;
-      pos2 = Pos[i2];
-      double foundAng = getAngle(pos1 - pos0, pos2 - pos1);
-      double diff = fabs(foundAng - comptonAng);
-      if(diff<mindiff){
-	mindiff = diff;
-	inter2 = i2;
+    for(int i=0; i<nhits; i++){
+      if(flagu[i]!=0) continue;
+
+      sn[n].clear();
+      sn[n].push_back(i);
+      et.push_back(e[i]); // total energy of cluster
+      flagu[i]=1;
+
+      for(int j=0; j<nhits; j++){
+	if(j==i || flagu[j]!=0) continue;
+
+	if(thetatest[i][j]<=alfa){
+	  sn[n].push_back(j);
+	  et[n] += e[j];
+	  flagu[j]=1;
+	}
+
+	if(sn[n].size() == kmax) break;
       }
+
+      // accept new cluster only if unique
+      for(int nn=0; nn<n; nn++){
+	if(sn[nn].size()==sn[n].size() && fabs(et[nn]-et[n])<1e-6){
+	  et.pop_back();
+	  break;
+	}
+      }
+
+      n=et.size();
     }
-    track.push_back(inter2);  flagu[inter2] = 1;
-  }
+  }// end of loop alfa
+#endif // end of ONECLUST
+  
+  //******** compute min chi2 of clusters ********
+  vector<vector<int>> interaction(MaxNDets);
+  vector<double> chi2tot;
+  for(int i=0; i<n; i++){ //loop clusters
+    flagu[i]=0;
+    interaction[i].clear();
+
+    if(sn[i].size()==1){
+      chi2tot.push_back(DBL_MAX);
+      interaction[i].push_back(sn[i][0]);
+
+    }else{ //sn[i].size()>1
+      chi2tot.push_back(DBL_MAX);
+
+      // calculate min chi2 with iteration
+      vector <TVector3> pos;  pos.push_back(TVector3(0,0,0));
+      vector <int> intid;     intid.push_back(-1);
+      vector <double> energy; energy.push_back(0);
+      vector <int> order;     order.push_back(0);
+      for(int j=0; j<sn[i].size(); j++){
+	pos.push_back(Pos[sn[i][j]]); // Pos relative to source
+	intid.push_back(sn[i][j]);
+	energy.push_back(e[sn[i][j]]);
+      }
+  
+      double minchi2 = CalcMinChi2(pos, intid, energy, et[i], order);
+      chi2tot[i] = minchi2 / (order.size()-2);
+
+      if(order.size()==sn[i].size()+1)
+	for(int j=1; j<order.size(); j++) interaction[i].push_back(intid[order[j]]);
+    }
+    
+  }// end of loop clusters
+
+  
+  //******** sort clusters according to chi2 ********
+
+  // single interactions are awarded for the time being the max chi2
+  for(int i=0; i<n; i++)
+    for(int j=i+1; j<n; j++)
+      if(chi2tot[i] > chi2tot[j]){
+	swap(chi2tot, i, j);
+	swap(et, i, j);
+	swap(flagu, i, j);
+	interaction[i].swap(interaction[j]);
+	sn[i].swap(sn[j]);
+      }
+
+  for(int i=0; i<n; i++)
+    if(flagu[i]==0)
+      for(int k=0; k<sn[i].size(); k++)
+	for(int l=i+1; l<n; l++)
+	  if(flagu[l]==0)
+	    for(int m=0; m<sn[l].size(); m++)
+	      if(sn[i][k] == sn[l][m]){
+		flagu[l]=1; // remove cluster with used interactions
+		break;
+	      }
+
+  // save the most likely track
+  if(interaction.size()<1) return;
+  
+  for(int i=0; i<interaction[0].size(); i++) track.push_back(interaction[0][i]);
 
   return;
 }
