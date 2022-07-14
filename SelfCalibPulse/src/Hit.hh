@@ -26,6 +26,9 @@ public:
   Hit(); // if hit is the source, det = -1, seg = -1
   virtual ~Hit();
 
+  void SetInterid(int val){ interid = val;}
+  int GetInterid(){ return interid;}
+  
   void SetLevel(int val){ level = val;}
   int GetLevel(){ return level;}
   
@@ -74,6 +77,7 @@ private:
 
   int   det;
   int   seg;
+  int   interid; // interaction id in a event
   vector<HitCollection*>* hitCollections; //one hit can be assigned to several hitcollections, pos set as the ave of all hitcollections
 
   Float_t depE; // deposit Energy in the hit, keV

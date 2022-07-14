@@ -570,6 +570,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
     }
     
     Hit *ahit = new Hit(fPS[i].det, fPS[i].seg, fPS[i].energy, hitpos, initpos); //keV and mm
+    ahit->SetInterid(fPS[i].interid);
     if(Detid<0 || fPS[i].det==Detid){
 #ifdef NOISE
       ahit->SetNoiseIdx(Nidx[i]);
@@ -963,6 +964,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   aps.det = -1;
   // calc average position
   vector<int>           simseg;
+  vector<int>           siminterid;
   vector<int>           simnhits;
   vector<vector<float>> simhiteng;
   vector<float>         simeng;
@@ -977,6 +979,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
     int interid = obj[iChain].inter->at(idet)[i];
 
     simseg.push_back(obj[iChain].pseg->at(idet)[i]); //pseg start from 0...
+    siminterid.push_back(interid);
     simnhits.push_back(1);
     vector<float> tmphiteng;
     tmphiteng.push_back(obj[iChain].energy->at(interid));
@@ -1017,6 +1020,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   for(int i=0; i<simeng.size(); i++){
     for(int j=i+1; j<simeng.size(); j++){
       if(simseg[i]==simseg[j]){
+	siminterid[i] = simeng[i] > simeng[j] ? siminterid[i] : siminterid[j];
 	simnhits[i] = simnhits[i] + simnhits[j];
 	for(int jj=0; jj<simhiteng[j].size(); jj++) simhiteng[i].push_back(simhiteng[j][jj]);
 	double tmpe = simeng[i]+simeng[j];
@@ -1029,6 +1033,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
 	simeng[i] = tmpe;
 
 	simseg.erase(simseg.begin()+j);
+	siminterid.erase(siminterid.begin()+j);
 	simnhits.erase(simnhits.begin()+j);
 	simhiteng[j].clear();
 	simhiteng.erase(simhiteng.begin()+j);
@@ -1053,6 +1058,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   
   aps.det = obj[iChain].pdet->at(idet);
   aps.seg = simseg[idx];
+  aps.interid = siminterid[idx];
   aps.nhits = simnhits[idx];
   for(int jj=0; jj<simhiteng[idx].size(); jj++) aps.hiteng.push_back(simhiteng[idx][jj]);
   aps.energy = simeng[idx];
