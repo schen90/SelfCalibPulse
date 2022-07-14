@@ -480,6 +480,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
     htree[idet] = new TTree("tree",Form("tree for det%d",idet));
   }
   
+  int            interid; // interaction id in a event
   vector<int>    vhcid;
   float          depE;
 #ifdef NOISE
@@ -512,6 +513,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("ientry",&ientry);
 	htree[idet]->Branch("det",&det);
 	htree[idet]->Branch("seg",&seg);
+	htree[idet]->Branch("interid",&interid);
 	htree[idet]->Branch("hcid",&vhcid);
 	htree[idet]->Branch("depE",&depE);
 	htree[idet]->Branch("calpos",calpos,"calpos[3]/F");
@@ -538,7 +540,8 @@ void AGATA::WriteEvtHitsfiles(int detid){
     for(Hit *ah : *fHits){
       det = ah->GetDet();
       seg = ah->GetSeg();
-
+      interid = ah->GetInterid();
+      
       bool kfill = false;
       for(int idet : idlist) if(idet==det) kfill = true;
       if(!kfill) continue;
@@ -635,6 +638,7 @@ void AGATA::CombEvtHitsfiles(){
     int          ientry;
     int          idet;
     int          iseg;
+    int          iinterid;
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
@@ -706,6 +710,7 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("ientry",        &obj[detid].ientry);
 	htree[detid]->SetBranchAddress("det",           &obj[detid].idet);
 	htree[detid]->SetBranchAddress("seg",           &obj[detid].iseg);
+	htree[detid]->SetBranchAddress("interid",       &obj[detid].iinterid);
 	htree[detid]->SetBranchAddress("hcid",          &obj[detid].ihcid);
 	htree[detid]->SetBranchAddress("depE",          &obj[detid].idepE);
 	htree[detid]->SetBranchAddress("calpos",         obj[detid].icalpos);
@@ -728,7 +733,7 @@ void AGATA::CombEvtHitsfiles(){
       MaxEntry += 1;
 
       hfileall->cd();
-      int oconfig, orun, oentry, odet, oseg;
+      int oconfig, orun, oentry, odet, oseg, ointerid;
       vector<int>    ovhcid;
       float          odepE;
       float          ocalpos[3];
@@ -745,6 +750,7 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("ientry",&oentry);
       htreeall->Branch("det",&odet);
       htreeall->Branch("seg",&oseg);
+      htreeall->Branch("interid",&ointerid);
       htreeall->Branch("hcid",&ovhcid);
       htreeall->Branch("depE",&odepE);
       htreeall->Branch("calpos",ocalpos,"calpos[3]/F");
@@ -773,6 +779,7 @@ void AGATA::CombEvtHitsfiles(){
 	      oentry = obj[detid].ientry;
 	      odet = obj[detid].idet;
 	      oseg = obj[detid].iseg;
+	      ointerid = obj[detid].iinterid;
 	      for(int id : *obj[detid].ihcid) ovhcid.push_back(id);
 	      odepE = obj[detid].idepE;
 	      for(int ix=0; ix<3; ix++) ocalpos[ix] = obj[detid].icalpos[ix];
@@ -831,6 +838,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
     int          ientry;
     int          idet;
     int          iseg;
+    int          iinterid;
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
@@ -905,6 +913,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
       htree[detid]->SetBranchAddress("ientry",        &obj[detid].ientry);
       htree[detid]->SetBranchAddress("det",           &obj[detid].idet);
       htree[detid]->SetBranchAddress("seg",           &obj[detid].iseg);
+      htree[detid]->SetBranchAddress("interid",       &obj[detid].iinterid);
       htree[detid]->SetBranchAddress("hcid",          &obj[detid].ihcid);
       htree[detid]->SetBranchAddress("depE",          &obj[detid].idepE);
       htree[detid]->SetBranchAddress("calpos",         obj[detid].icalpos);
@@ -929,6 +938,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
       
     vector<int>            vdet;
     vector<int>            vseg;
+    vector<int>            vinterid;
     vector<vector<int>>    vhcid;
     vector<float>          vdepE;
     vector<vector<double>> vcalpos;
@@ -946,6 +956,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
       //if(iety%10==0) cout<<"\r ientry = "<<iety<<flush;
       vdet.clear();
       vseg.clear();
+      vinterid.clear();
       vhcid.clear();
       vdepE.clear();
       vcalpos.clear();
@@ -977,6 +988,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 
 	  vdet.push_back(obj[detid].idet);
 	  vseg.push_back(obj[detid].iseg);
+	  vinterid.push_back(obj[detid].iinterid);
 	  vhcid.push_back(*obj[detid].ihcid);
 	  vdepE.push_back(obj[detid].idepE);
 
@@ -1010,7 +1022,8 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
       for(int i=0; i<vdet.size(); i++){
 	int detid = vdet[i];
 	int segid = vseg[i];
-
+	int interid = vinterid[i];
+	
 	float depE = vdepE[i]; // keV
 	TVector3 initpos(vcalpos[i][0],vcalpos[i][1],vcalpos[i][2]); // mm
 #ifdef REALPOS
@@ -1019,7 +1032,8 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 	TVector3 hitpos(0,0,0);
 #endif
 	Hit *ahit = new Hit(detid, segid, depE, hitpos, initpos);
-
+	ahit->SetInterid(interid);
+	
 #ifdef NOISE
 	ahit->SetNoiseIdx(vnoiseidx[i]);
 	ahit->SetNoiseIdxShift(vnoiseidxshift[i]);
@@ -1079,6 +1093,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     int          ientry;
     int          idet;
     int          iseg;
+    int          iinterid;
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
@@ -1143,6 +1158,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     htree->SetBranchAddress("ientry",        &obj.ientry);
     htree->SetBranchAddress("det",           &obj.idet);
     htree->SetBranchAddress("seg",           &obj.iseg);
+    htree->SetBranchAddress("interid",       &obj.iinterid);
     htree->SetBranchAddress("hcid",          &obj.ihcid);
     htree->SetBranchAddress("depE",          &obj.idepE);
     htree->SetBranchAddress("calpos",         obj.icalpos);
@@ -1164,6 +1180,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 
     vector<int>            vdet;
     vector<int>            vseg;
+    vector<int>            vinterid;
     vector<vector<int>>    vhcid;
     vector<float>          vdepE;
     vector<vector<double>> vcalpos;
@@ -1182,6 +1199,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       //if(iety%10==0) cout<<"\r ientry = "<<iety<<flush;
       vdet.clear();
       vseg.clear();
+      vinterid.clear();
       vhcid.clear();
       vdepE.clear();
       vcalpos.clear();
@@ -1203,6 +1221,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 
 	  vdet.push_back(obj.idet);
 	  vseg.push_back(obj.iseg);
+	  vinterid.push_back(obj.iinterid);
 	  vhcid.push_back(*obj.ihcid);
 	  vdepE.push_back(obj.idepE);
 
@@ -1236,6 +1255,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       for(int i=0; i<vdet.size(); i++){
 	int detid = vdet[i];
 	int segid = vseg[i];
+	int interid = vinterid[i];
 
 	float depE = vdepE[i]; // keV
 	TVector3 initpos(vcalpos[i][0],vcalpos[i][1],vcalpos[i][2]); // mm
@@ -1245,7 +1265,8 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	TVector3 hitpos(0,0,0);
 #endif
 	Hit *ahit = new Hit(detid, segid, depE, hitpos, initpos);
-
+	ahit->SetInterid(interid);
+	
 #ifdef NOISE
 	ahit->SetNoiseIdx(vnoiseidx[i]);
 	ahit->SetNoiseIdxShift(vnoiseidxshift[i]);
@@ -2099,6 +2120,7 @@ void AGATA::TrackingLoop(){
       double depE = fHits->at(atrack[0])->GetE(); // keV
 
       Hit *sourcehit = new Hit(sourcepos);
+      sourcehit->SetInterid(-1);
 #ifdef NTHREADS2
       lock_guard<mutex> lock(Pathsmtx);
 #endif

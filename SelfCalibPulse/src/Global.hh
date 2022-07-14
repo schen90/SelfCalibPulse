@@ -77,6 +77,7 @@ struct PS{
   int   det;
   int   seg;
   int   nhits;
+  int   interid;  // interaction id in a event
   vector<float> hiteng; // hit energy
   float energy; // core energy
 #ifdef REALPOS
