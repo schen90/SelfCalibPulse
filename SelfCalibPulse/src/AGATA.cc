@@ -2113,6 +2113,18 @@ void AGATA::TrackingLoop(){
     tracker.Simpletracking();
     vector<int> atrack = tracker.GetTrack();
 
+#ifdef TRACKINGTREE
+    {
+      lock_guard<mutex> lock(Trtreemtx);
+      Trnhits = atrack.size();
+      TrSource = true;
+      TrCorrect = tracker.CheckOrder();
+      TrFOM1 = tracker.GetBestChi2();
+      TrFOM2 = tracker.GetSecondBestChi2();
+      Trtree->Fill();
+    }
+#endif
+    
     // make paths
     if(atrack.size()>1){ // at least two hits
       int ngoodhit = 0;
@@ -2166,7 +2178,7 @@ void AGATA::TrackingLoop(){
 }
 
 
-void AGATA::Tracking(){
+void AGATA::Tracking(int iter){
   ievt = 0;
 
   cout<<Form("Mem %.2fGB...",GetCurrentMemoryUsage()/GB);
@@ -2184,6 +2196,16 @@ void AGATA::Tracking(){
   cout<<Form("Mem %.2fGB",GetCurrentMemoryUsage()/GB)<<endl;
 
   cPaths = fPaths->size();
+
+#ifdef TRACKINGTREE
+  Trfile = new TFile(Form("share/Trtree%d.root",iter),"RECREATE");
+  Trtree = new TTree("tree","tracking results");
+  Trtree->Branch("nhits",&Trnhits);
+  Trtree->Branch("source",&TrSource);
+  Trtree->Branch("correct",&TrCorrect);
+  Trtree->Branch("FOM1",&TrFOM1);
+  Trtree->Branch("FOM2",&TrFOM2);
+#endif
   
 #ifndef NTHREADS2
   TrackingLoop();
@@ -2211,6 +2233,12 @@ void AGATA::Tracking(){
       <<"Hits-"<<cHits
       <<" HCs-"<<cHCs<<".."
       <<"Paths-"<<cPaths<<endl;
+
+#ifdef TRACKINGTREE
+  Trfile->cd();
+  Trtree->Write();
+  Trfile->Close();
+#endif
   
   return;
 }
