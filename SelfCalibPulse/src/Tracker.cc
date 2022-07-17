@@ -49,6 +49,7 @@ Tracker::~Tracker(){
 
 bool Tracker::CheckOrder(){
   bool isCorrect = true;
+  if(track.size()<2) return isCorrect;
   for(int i=0; i<track.size()-1; i++){
     if( fHits->at(track[i])->GetInterid() > fHits->at(track[i+1])->GetInterid() )
       isCorrect = false;
@@ -611,6 +612,9 @@ void Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<doub
   order.swap(bestorder);
   bestorder.clear();
   testorder.clear();
+  
+  bestchi2[0] = minchi2[0];
+  bestchi2[1] = minchi2[1];
 }
 
 
@@ -752,8 +756,8 @@ void Tracker::Simpletracking(){
   
   for(int i=0; i<interaction[0].size(); i++) track.push_back(interaction[0][i]);
 
-  bestchi2 = chi2tot[0];
-  secondbestchi2 = chi2tot2[0];
+  FOM1 = chi2tot[0];
+  FOM2 = chi2tot2[0];
   
   return;
 }
