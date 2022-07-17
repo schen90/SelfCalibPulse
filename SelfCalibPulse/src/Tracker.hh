@@ -21,8 +21,8 @@ public:
 
   vector<int> GetTrack(){ return track;}
   bool CheckOrder();
-  double GetBestChi2(){return bestchi2;}
-  double GetSecondBestChi2(){return secondbestchi2;}
+  double GetFOM1(){return FOM1;}
+  double GetFOM2(){return FOM2;}
   
   void SetSourcePos(float *posval){ sPos.SetXYZ(posval[0],posval[1],posval[2]);}
   void SetAlfaRed(double val){ alfared = val;}
@@ -32,7 +32,7 @@ public:
 
   void Simpletracking();
   void CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
-		   double etotale, vector<int> &order, double BestChi2[]);
+		   double etotale, vector<int> &order, double bestchi2[]);
 
   
 private:
@@ -43,8 +43,8 @@ private:
 
   vector<int> track; // the most likely order of Hits
 
-  double bestchi2; // chi2 of the most likely order
-  double secondbestchi2; // second best chi2
+  double FOM1; // chi2 of the most likely order
+  double FOM2; // second best chi2
 
   TVector3 sPos; // cm source position
   

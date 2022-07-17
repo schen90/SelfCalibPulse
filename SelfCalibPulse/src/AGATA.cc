@@ -2114,13 +2114,13 @@ void AGATA::TrackingLoop(){
     vector<int> atrack = tracker.GetTrack();
 
 #ifdef TRACKINGTREE
-    {
+    if(atrack.size()>1){
       lock_guard<mutex> lock(Trtreemtx);
       Trnhits = atrack.size();
       TrSource = true;
       TrCorrect = tracker.CheckOrder();
-      TrFOM1 = tracker.GetBestChi2();
-      TrFOM2 = tracker.GetSecondBestChi2();
+      TrFOM1 = tracker.GetFOM1();
+      TrFOM2 = tracker.GetFOM2();
       Trtree->Fill();
     }
 #endif
