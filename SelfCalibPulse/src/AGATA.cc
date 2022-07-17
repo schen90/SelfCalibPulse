@@ -2139,8 +2139,8 @@ void AGATA::TrackingLoop(){
       ngoodhit = 1; // sourcehit is always good hit
       //if(fHits->at(atrack[0])->hasHitCollection()>0) ngoodhit++;
       //if(fHits->at(atrack[1])->hasHitCollection()>0) ngoodhit++;
-      if(fHits->at(atrack[0])->hasgoodHCs(3)>0) ngoodhit++;
-      if(fHits->at(atrack[1])->hasgoodHCs(3)>0) ngoodhit++;
+      if(fHits->at(atrack[0])->hasgoodHCs(0)>0) ngoodhit++;
+      if(fHits->at(atrack[1])->hasgoodHCs(0)>0) ngoodhit++;
       
       //if(ngoodhit>1){ // at least two good hit
       if(ngoodhit==3){ // three good hit
@@ -2157,9 +2157,9 @@ void AGATA::TrackingLoop(){
 	//if(fHits->at(atrack[i-1])->hasHitCollection()>0) ngoodhit++;
 	//if(fHits->at(atrack[i]  )->hasHitCollection()>0) ngoodhit++;
 	//if(fHits->at(atrack[i+1])->hasHitCollection()>0) ngoodhit++;
-	if(fHits->at(atrack[i-1])->hasgoodHCs(3)>0) ngoodhit++;
-	if(fHits->at(atrack[i]  )->hasgoodHCs(3)>0) ngoodhit++;
-	if(fHits->at(atrack[i+1])->hasgoodHCs(3)>0) ngoodhit++;
+	if(fHits->at(atrack[i-1])->hasgoodHCs(0)>0) ngoodhit++;
+	if(fHits->at(atrack[i]  )->hasgoodHCs(0)>0) ngoodhit++;
+	if(fHits->at(atrack[i+1])->hasgoodHCs(0)>0) ngoodhit++;
 
 	//if(ngoodhit>1){ // at least two good hit
 	if(ngoodhit==3){ // three good hit
