@@ -612,6 +612,9 @@ void Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<doub
   order.swap(bestorder);
   bestorder.clear();
   testorder.clear();
+  
+  bestchi2[0] = minchi2[0];
+  bestchi2[1] = minchi2[1];
 }
 
 
