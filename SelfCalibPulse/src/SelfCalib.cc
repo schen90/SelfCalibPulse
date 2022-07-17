@@ -280,7 +280,7 @@ int main(int argc, char* argv[]){
       cout<<"\e[1;31m"<<"Full iteration "<<FullCounter<<" : \e[0m"<<endl;
 
       time(&stepstart);
-      agata->Tracking();
+      agata->Tracking(FullCounter);
       time(&stepstop);
       printf("=== Tracking time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
 

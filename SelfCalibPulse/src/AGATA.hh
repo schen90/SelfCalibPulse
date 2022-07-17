@@ -87,7 +87,7 @@ public:
 
   // Tracking
   void TrackingLoop(); // tracking fHits
-  void Tracking(); // loop all events
+  void Tracking(int iter); // loop all events
   
   void RegisterPathswithHCs();
 
@@ -150,6 +150,16 @@ private:
   atomic_int NevtsTotal;
   mutex EvtHitsmtx;
 
+#ifdef TRACKINGTREE
+  TFile *Trfile;
+  TTree *Trtree;
+  int  Trnhits;
+  bool TrSource;  // if start from source
+  bool TrCorrect;
+  double TrFOM1;
+  double TrFOM2;
+  mutex Trtreemtx;
+#endif
   
   // Path
   vector<Path*>* fPaths; // Path storage

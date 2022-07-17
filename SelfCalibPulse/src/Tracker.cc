@@ -47,6 +47,17 @@ Tracker::~Tracker(){
 }
 
 
+bool Tracker::CheckOrder(){
+  bool isCorrect = true;
+  for(int i=0; i<track.size()-1; i++){
+    if( fHits->at(track[i])->GetInterid() > fHits->at(track[i+1])->GetInterid() )
+      isCorrect = false;
+  }
+  return isCorrect;
+}
+
+
+// OFT
 double sig_pair(double E){ // pair cross section MeV and cm
   /* fitted in 1e-24cm2 units for Ge from atomic data tables 1970 7 page 590 */
   double temp;
@@ -518,17 +529,17 @@ Double_t calcComptonAngle(Double_t Ein, Double_t Edep){
 
 
 // calculate best min chi2 with iteration for simple tracking
-double Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
-			    double etotale, vector<int> &order){
+void Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
+			  double etotale, vector<int> &order, double bestchi2[]){
   if(order.size()==0){
     order.push_back(0); // order[0]=0: source
-    return CalcMinChi2(pos,intid,energy,etotale,order);
+    return CalcMinChi2(pos,intid,energy,etotale,order, bestchi2);
   }
 
   vector<int> bestorder;  bestorder.resize(order.size());
   vector<int> testorder;  testorder.resize(order.size());
   for(int i=0; i<order.size(); i++) bestorder[i] = order[i];
-  double minchi2 = DBL_MAX;
+  double minchi2[2] = {DBL_MAX,DBL_MAX};
 
   if(order.size()==1){ // order[0]=0: source
     for(int m=1; m<energy.size(); m++){
@@ -537,11 +548,19 @@ double Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<do
       for(int i=0; i<order.size(); i++) testorder[i] = order[i];
       testorder.push_back(m);
 
-      double chi2test = CalcMinChi2(pos,intid,energy,etotale,testorder);
+      double chi2test[2];
+      CalcMinChi2(pos,intid,energy,etotale,testorder, chi2test);
 
-      if(chi2test<minchi2){
-        minchi2 = chi2test;
+      if(chi2test[0]<minchi2[0]){
+	minchi2[1] = minchi2[0];
+        minchi2[0] = chi2test[0];
         testorder.swap(bestorder);
+      }else if(chi2test[0]<minchi2[1]){
+	minchi2[1] = chi2test[0];
+      }
+
+      if(chi2test[1]<minchi2[1]){
+	minchi2[1] = chi2test[1];
       }
     }
 
@@ -566,22 +585,32 @@ double Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<do
       double escatter = etotale - energy[l];
 
       // doi:10.1016/j.nima.2004.06.154
-      double chi2test = exp(40. * fabs(cos(cangle) - cos(angle)) );
+      double chi2tmp = exp(40. * fabs(cos(cangle) - cos(angle)) );
 
+      double chi2test[2] = {0,0};
       if(testorder.size()<energy.size()) // next interaction
-        chi2test += CalcMinChi2(pos,intid,energy,escatter,testorder);
+        CalcMinChi2(pos,intid,energy,escatter,testorder, chi2test);
 
-      if(chi2test<minchi2){
-        minchi2 = chi2test;
+      chi2test[0] += chi2tmp;
+      chi2test[1] += chi2tmp;
+     
+      if(chi2test[0]<minchi2[0]){
+	minchi2[1] = minchi2[0];
+        minchi2[0] = chi2test[0];
         testorder.swap(bestorder);
+      }else if(chi2test[0]<minchi2[1]){
+	minchi2[1] = chi2test[0];
       }
+
+      if(chi2test[1]<minchi2[1]){
+	minchi2[1] = chi2test[1];
+      }      
     }
   }
 
   order.swap(bestorder);
   bestorder.clear();
   testorder.clear();
-  return minchi2;
 }
 
 
@@ -656,16 +685,19 @@ void Tracker::Simpletracking(){
   //******** compute min chi2 of clusters ********
   vector<vector<int>> interaction(MaxNDets);
   vector<double> chi2tot;
+  vector<double> chi2tot2; // secondbestchi2
   for(int i=0; i<n; i++){ //loop clusters
     flagu[i]=0;
     interaction[i].clear();
 
     if(sn[i].size()==1){
       chi2tot.push_back(DBL_MAX);
+      chi2tot2.push_back(DBL_MAX);
       interaction[i].push_back(sn[i][0]);
 
     }else{ //sn[i].size()>1
       chi2tot.push_back(DBL_MAX);
+      chi2tot2.push_back(DBL_MAX);
 
       // calculate min chi2 with iteration
       vector <TVector3> pos;  pos.push_back(TVector3(0,0,0));
@@ -678,8 +710,10 @@ void Tracker::Simpletracking(){
 	energy.push_back(e[sn[i][j]]);
       }
   
-      double minchi2 = CalcMinChi2(pos, intid, energy, et[i], order);
-      chi2tot[i] = minchi2 / (order.size()-2);
+      double minchi2[2];
+      CalcMinChi2(pos, intid, energy, et[i], order, minchi2);
+      chi2tot[i] = minchi2[0] / (order.size()-2);
+      chi2tot2[i] = minchi2[1] / (order.size()-2);
 
       if(order.size()==sn[i].size()+1)
 	for(int j=1; j<order.size(); j++) interaction[i].push_back(intid[order[j]]);
@@ -695,6 +729,7 @@ void Tracker::Simpletracking(){
     for(int j=i+1; j<n; j++)
       if(chi2tot[i] > chi2tot[j]){
 	swap(chi2tot, i, j);
+	swap(chi2tot2, i, j);
 	swap(et, i, j);
 	swap(flagu, i, j);
 	interaction[i].swap(interaction[j]);
@@ -717,6 +752,9 @@ void Tracker::Simpletracking(){
   
   for(int i=0; i<interaction[0].size(); i++) track.push_back(interaction[0][i]);
 
+  bestchi2 = chi2tot[0];
+  secondbestchi2 = chi2tot2[0];
+  
   return;
 }
 

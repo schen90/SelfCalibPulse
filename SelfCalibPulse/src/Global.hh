@@ -18,6 +18,7 @@ using namespace std;
 #define NTHREADS 6
 #define NTHREADS2 30
 #define ONECLUST // make one cluster in tracking
+#define TRACKINTTREE // ouput tracking results
 #define WITHPS //comment out to save memory
 //#define PSA // PSA to assign initial pos
 #define MINUIT2
