@@ -1371,6 +1371,7 @@ void AGATA::ClearEvtHitsMem(){
   fPaths->clear();
   fPaths->shrink_to_fit();
   cPaths = 0;
+  cPathsN[0] = cPathsN[1] = cPathsN[2] = cPathsN[3] = 0;
 
   return;
 }
@@ -2118,6 +2119,7 @@ void AGATA::TrackingLoop(){
       lock_guard<mutex> lock(Trtreemtx);
       Trnhits = atrack.size();
       TrSource = true;
+      TrSourcePos[0] = sourcepos.X();  TrSourcePos[1] = sourcepos.Y();  TrSourcePos[2] = sourcepos.Z();
       TrCorrect = tracker.CheckOrder();
       TrFOM1 = tracker.GetFOM1();
       TrFOM2 = tracker.GetFOM2();
@@ -2141,7 +2143,8 @@ void AGATA::TrackingLoop(){
       //if(fHits->at(atrack[1])->hasHitCollection()>0) ngoodhit++;
       if(fHits->at(atrack[0])->hasgoodHCs(0)>0) ngoodhit++;
       if(fHits->at(atrack[1])->hasgoodHCs(0)>0) ngoodhit++;
-      
+      cPathsN[ngoodhit]++;
+
       //if(ngoodhit>1){ // at least two good hit
       if(ngoodhit==3){ // three good hit
 	Path *apath = new Path(sourcehit,fHits->at(atrack[0]),fHits->at(atrack[1]),
@@ -2160,7 +2163,8 @@ void AGATA::TrackingLoop(){
 	if(fHits->at(atrack[i-1])->hasgoodHCs(0)>0) ngoodhit++;
 	if(fHits->at(atrack[i]  )->hasgoodHCs(0)>0) ngoodhit++;
 	if(fHits->at(atrack[i+1])->hasgoodHCs(0)>0) ngoodhit++;
-
+	cPathsN[ngoodhit]++;
+	
 	//if(ngoodhit>1){ // at least two good hit
 	if(ngoodhit==3){ // three good hit
 	  Path *apath = new Path(fHits->at(atrack[i-1]),fHits->at(atrack[i]),fHits->at(atrack[i+1]),
@@ -2235,6 +2239,9 @@ void AGATA::Tracking(int iter){
       <<" HCs-"<<cHCs<<".."
       <<"Paths-"<<cPaths<<endl;
 
+  cout<<" .. Paths0-"<<cPathsN[0]<<" .. Paths1-"<<cPathsN[1]
+      <<" .. Paths2-"<<cPathsN[2]<<" .. Paths3-"<<cPathsN[3]<<" .."<<endl;
+  
 #ifdef TRACKINGTREE
   Trfile->cd();
   Trtree->Write();

@@ -43,6 +43,8 @@ private:
 
   vector<int> track; // the most likely order of Hits
 
+  // OFT tracking only output FOM1
+  // simple tracking ouput FOM1 and FOM2
   double FOM1; // chi2 of the most likely order
   double FOM2; // second best chi2
 

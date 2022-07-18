@@ -508,6 +508,8 @@ void Tracker::OFTtracking(){
   
   for(int i=0; i<interaction[0].size(); i++) track.push_back(interaction[0][i]);
 
+  FOM1 = probtot[0];
+
   return;
 }
 
