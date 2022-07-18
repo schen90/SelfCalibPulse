@@ -591,6 +591,8 @@ void Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<doub
       double chi2test[2] = {0,0};
       if(testorder.size()<energy.size()) // next interaction
         CalcMinChi2(pos,intid,energy,escatter,testorder, chi2test);
+      else
+	chi2test[1] = DBL_MAX;
 
       chi2test[0] += chi2tmp;
       chi2test[1] += chi2tmp;
