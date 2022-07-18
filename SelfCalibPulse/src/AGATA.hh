@@ -215,6 +215,7 @@ private:
   atomic_int cPaths;
   atomic_int cHits;
   atomic_int cHCs;
+  atomic_int cPathsN[4];
 
   time_t start, stop;
 
