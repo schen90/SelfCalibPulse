@@ -178,12 +178,17 @@ int main(int argc, char* argv[]){
   agata->SetGroupPos(false);
 
 #ifdef NOISE
-  double chi2slimit[3] = {2,0.3,2}; // group pulse shape with chi2s[3] w/ noise
+  double chi2slimit[3] = {1,0.2,0.6}; // group pulse shape with chi2s[3] w/ noise test1
+  //double chi2slimit[3] = {1,0.5,0.6}; // group pulse shape with chi2s[3] w/ noise test2
+  //double chi2slimit[3] = {1,0.1,0.6}; // group pulse shape with chi2s[3] w/ noise test3
+  //if(Detid>-1 && Detid!=0) chi2slimit[1] = 0.5; // test4
+  //if(Detid>-1 && Detid==0) chi2slimit[1] = 0.5; // test5
+  
   agata->SetMaxChi2s(chi2slimit[0],chi2slimit[1],chi2slimit[2]);
   cout<<Form("With noise Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
   cout<<Form("PSCEmin = %.0f keV",PSCEMIN)<<endl;
 #else
-  double chi2slimit[3] = {2,0.1,1}; // group pulse shape with chi2s[3] w/o noise
+  double chi2slimit[3] = {0.5,0.1,0.3}; // group pulse shape with chi2s[3] w/o noise
   agata->SetMaxChi2s(chi2slimit[0],chi2slimit[1],chi2slimit[2]);
   cout<<Form("Without noise, Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
 #endif
@@ -212,6 +217,25 @@ int main(int argc, char* argv[]){
     time(&stepstop);
     printf("=== GenerateHCs time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
 
+    // loop till no new PSC added
+    treereader->SetUpdateHCs(1);
+    for(int iupdate=0; iupdate<3; iupdate++){
+      bool kNewPSC = agata->IsNewPSC(); // if new PSC added
+      if(!kNewPSC) break;
+      cout<<"\e[1;31m New PSC added from last step, UpdateHCs "<<iupdate<<" ... \e[0m"<<endl;
+      treereader->SetNewPSC(kNewPSC);
+      agata->SetAddNewPSC(false);
+
+      time(&stepstart);
+      if(kConfig) treereader->GenerateHCs(agata);
+      time(&stepstop);
+      printf("=== UpdateHCs %d time: %.1f seconds ===\n\n",iupdate,difftime(stepstop,stepstart));
+    }
+    treereader->SetNewPSC(false);
+    agata->SetAddNewPSC(false);
+
+    
+    /*
     // remove PSCs with nhits<MINHITS, and divide PSCs with nhits>MAXHITS
     time(&stepstart);
     agata->CheckPSCs(MINHITS,MAXHITS);
@@ -236,7 +260,8 @@ int main(int argc, char* argv[]){
     treereader->SetNewPSC(false);
     agata->SetAddNewPSC(false);
     agata->ClearHitLevelMarker(2);
-
+    */
+    
     // save grouped HCs and Hits
     time(&stepstart);
     agata->WritePSCfiles(Detid);
