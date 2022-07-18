@@ -183,7 +183,7 @@ int main(int argc, char* argv[]){
   //double chi2slimit[3] = {1,0.1,0.6}; // group pulse shape with chi2s[3] w/ noise test3
   //if(Detid>-1 && Detid!=0) chi2slimit[1] = 0.5; // test4
   //if(Detid>-1 && Detid==0) chi2slimit[1] = 0.5; // test5
-  
+
   agata->SetMaxChi2s(chi2slimit[0],chi2slimit[1],chi2slimit[2]);
   cout<<Form("With noise Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
   cout<<Form("PSCEmin = %.0f keV",PSCEMIN)<<endl;
@@ -234,7 +234,7 @@ int main(int argc, char* argv[]){
     treereader->SetNewPSC(false);
     agata->SetAddNewPSC(false);
 
-    
+
     /*
     // remove PSCs with nhits<MINHITS, and divide PSCs with nhits>MAXHITS
     time(&stepstart);
@@ -261,7 +261,7 @@ int main(int argc, char* argv[]){
     agata->SetAddNewPSC(false);
     agata->ClearHitLevelMarker(2);
     */
-    
+
     // save grouped HCs and Hits
     time(&stepstart);
     agata->WritePSCfiles(Detid);
