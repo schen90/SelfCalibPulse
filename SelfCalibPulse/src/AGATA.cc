@@ -2202,6 +2202,7 @@ void AGATA::Tracking(int iter){
   Trtree = new TTree("tree","tracking results");
   Trtree->Branch("nhits",&Trnhits);
   Trtree->Branch("source",&TrSource);
+  Trtree->Branch("sourcepos",TrSourcePos,"sourcepos[3]/F");
   Trtree->Branch("correct",&TrCorrect);
   Trtree->Branch("FOM1",&TrFOM1);
   Trtree->Branch("FOM2",&TrFOM2);

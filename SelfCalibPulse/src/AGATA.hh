@@ -155,6 +155,7 @@ private:
   TTree *Trtree;
   int  Trnhits;
   bool TrSource;  // if start from source
+  float TrSourcePos[3];
   bool TrCorrect;
   double TrFOM1;
   double TrFOM2;
