@@ -42,6 +42,7 @@ public:
   virtual void LoadNoise();
   
   virtual void ScanPS(AGATA *agata, int nevts);
+  virtual void ScanPS(AGATA *agata, int nevts, double Diff);
   
   virtual void Init(int iChain);
 

@@ -27,7 +27,7 @@ void help(){
       <<setw(30)<<left<<" -comb"<<" : combine Hit files for every run"<<endl
       <<setw(30)<<left<<" -Fit"<<" : Fit HCs pos"<<endl
       <<setw(30)<<left<<" -loop Ntrack Nfit"<<" : set iterate Ntrack Nfit"<<endl
-      <<setw(30)<<left<<" -scanPS"<<" : scan Pulse Shape for one detector to compare Chi2"<<endl
+      <<setw(30)<<left<<" -scanPS Nevts Diff"<<" : scan Pulse Shape for one detector to compare Chi2"<<endl
       <<endl;
   return;
 }
@@ -58,6 +58,7 @@ int main(int argc, char* argv[]){
   int NFitLoop = 0;
   string PSCPath = "PSCfiles";
   int MaxEvts = -1;
+  double Diff = -1;
 
   if(argc==1){
     help();
@@ -88,6 +89,7 @@ int main(int argc, char* argv[]){
     }else if(TString(argv[i]) == "-scanPS"){
       kScanPS = true;
       MaxEvts = atoi(argv[++i]);
+      Diff = atof(argv[++i]);
     }
 
   }
@@ -198,7 +200,7 @@ int main(int argc, char* argv[]){
   // Scan PS to determine chi2slimit
   //*****************************************//
   if(kScanPS){
-    treereader->ScanPS(agata, MaxEvts);
+    treereader->ScanPS(agata, MaxEvts, Diff);
     delete treereader;
     delete agata;
     time(&stop);

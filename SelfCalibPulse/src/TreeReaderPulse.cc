@@ -118,12 +118,16 @@ void TreeReaderPulse::Load(string configfile){
   SourcePos= fSourcePos[0];
 }
 
-
 void TreeReaderPulse::ScanPS(AGATA *agata, int nevts){
+  ScanPS(agata, nevts, -1);
+}
+
+void TreeReaderPulse::ScanPS(AGATA *agata, int nevts, double Diff){
   fChain[0]->GetEntry(0);
   int tdet = obj[0].pdet->at(0);
   cout<<"compare pulse shape for det "<<tdet<<endl;
 
+  int itype = tdet%3;
   AGATAgeo* agatageo = agata->GetGeo();
 
   vector<PS> fPS;
@@ -166,6 +170,7 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts){
   vector<float> hiteng1;
   vector<float> hiteng2;
   Float_t SimPos[3];
+  Float_t Phi, Radius, Z, PhiC, ZC;
   Float_t PhiRZ1[3], PhiRZ2[3];
   Float_t dist;
   Float_t chi2;
@@ -188,6 +193,11 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts){
   TTree *anatree = new TTree("tree","analyzed tree");
   anatree->Branch("simseg", &simseg, "simseg/I");
   anatree->Branch("SimPos", SimPos, "SimPos[3]/F");
+  anatree->Branch("Phi", &Phi, "Phi/F");
+  anatree->Branch("Radius", &Radius, "Radius/F");
+  anatree->Branch("Z", &Z, "Z/F");
+  anatree->Branch("PhiC", &PhiC, "PhiC/F"); // phi relative to seg center
+  anatree->Branch("ZC", &ZC, "ZC/F"); // z relative to seg center
   anatree->Branch("chi2", &chi2, "chi2/F");
   anatree->Branch("chi2s", chi2s, "chi2s[3]/F");
   anatree->Branch("nfired", &nfired, "nfired/I");
@@ -228,6 +238,12 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts){
       for(int ii=0; ii<fPS[ievt].hiteng.size(); ii++) hiteng1.push_back(fPS[ievt].hiteng[ii]);
     }
 
+    TMatrixD SegPos(3,1);
+    SegPos = agatageo->GetLocalSegPos(itype,simseg);
+    TVector3 segvec(SegPos(0,0),SegPos(1,0),0);
+    float SegPhi = segvec.Phi()/TMath::Pi()*180;
+    float SegR   = segvec.Mag();
+    float SegZ   = SegPos(2,0);
 #ifdef REALPOS
     for(int ix=0; ix<3; ix++) SimPos[ix] = fPS[ievt].detpos[ix];
     TVector3 ivec(fPS[ievt].detpos[0],fPS[ievt].detpos[1],0);
@@ -235,6 +251,11 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts){
     PhiRZ1[1] = ivec.Mag();
     PhiRZ1[2] = fPS[ievt].detpos[2];
 
+    Phi    = PhiRZ1[0];    
+    Radius = PhiRZ1[1];    
+    Z      = PhiRZ1[2];
+    PhiC   = Phi - SegPhi; if(PhiC>180) PhiC-=360; if(PhiC<-180) PhiC+=360;
+    ZC     = Z - SegZ;
     postree->Fill();
 #endif
 
@@ -268,6 +289,21 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts){
       rdiffphi = (PhiRZ1[1]+PhiRZ2[1])/2*diffphi/180*TMath::Pi();
       diffr = fabs(PhiRZ1[1] - PhiRZ2[1]);
       diffz = fabs(PhiRZ1[2] - PhiRZ2[2]);
+
+      if(Diff>0){
+	double difflimit = 0.5;
+	int ndiff = 0;
+	if(diffr>difflimit) ndiff++;
+	if(diffz>difflimit) ndiff++;
+	if(rdiffphi>difflimit) ndiff++;
+	if(ndiff!=1) continue; // select data diff only in one dimension
+
+	ndiff = 0;
+	if(fabs(diffr-Diff)<0.2) ndiff++;
+	if(fabs(diffz-Diff)<0.2) ndiff++;
+	if(fabs(rdiffphi-Diff)<0.2) ndiff++;
+	if(ndiff!=1) continue; // select data only match Diff
+      }
 #endif
 
       nfired=0;
