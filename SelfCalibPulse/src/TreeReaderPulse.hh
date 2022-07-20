@@ -43,6 +43,8 @@ public:
   
   virtual void ScanPS(AGATA *agata, int nevts);
   virtual void ScanPS(AGATA *agata, int nevts, double Diff);
+  virtual void ScanPSLoop1(int iChain, AGATA *agata, int nevts);
+  virtual void ScanPSLoop2(int itype, TTree *postree, TTree *anatree, AGATA *agata, int nevts, double Diff);
   
   virtual void Init(int iChain);
 
@@ -135,6 +137,10 @@ private:
   int kInterrupt;
   mutex treemtx; // tree lock for threads read
   time_t start, stop;
+
+  // ScanPS
+  vector<PS> fPSs[3];
+  mutex scanmtx;
 
 };
 

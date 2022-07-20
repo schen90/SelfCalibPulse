@@ -128,46 +128,162 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts, double Diff){
   //cout<<"compare pulse shape for det "<<tdet<<endl;
 
   //int itype = tdet%3;
-  AGATAgeo* agatageo = agata->GetGeo();
 
-  vector<PS> fPS[3];
   int nentries = fChain[0]->GetEntriesFast();
   cout<<"find "<<nentries<<" events from tree"<<endl;
-  int itype;
-  for(ievt=0; ievt<nentries; ievt++){
-    if(ievt%10000==0) cout<<"\r load "<<fPS[0].size()<<"__"<<fPS[1].size()<<"__"<<fPS[2].size()<<" / "<<nevts<<" pulse shape... ievt = "<<ievt<<flush;
+  irun = MinRun[0];
+  ievt = 0;
+  kInterrupt = 0;
 
-    fChain[0]->GetEntry(ievt);
-    for(int idet=0; idet<obj[0].pdet->size(); idet++){
-      //if(obj[0].pdet->at(idet)!=tdet) continue;
-      itype = obj[0].pdet->at(idet)%3;
-      
-      int tmpnidx = -1, tmpnidxshift = 0;
-#ifdef NOISE
-      tmpnidx = (int)gRandom->Uniform(0,NOISE);
-      tmpnidxshift = (int)gRandom->Uniform(0,NOISE/(NSig*NSegCore));
-#endif
-      int segidx = -1;
-      PS aps = GetAPS(0,agata,idet,tmpnidx,tmpnidxshift,false,segidx); // aps w/ PS
-      if(aps.det<0) continue;
+#ifndef NTHREADS
+  ScanPSLoop1(0, agata, nevts);
 
-#ifdef SINGLEHIT
-      if(aps.nhits>1) continue;
-#endif
+#else
+  // loop trees with multi threads
+  thread th[NTHREADS];
+  cout<<"using "<<NTHREADS<<" threads:"<<endl;
 
-      if(fPS[itype].size()<nevts) fPS[itype].push_back(aps);
-    }
-
-    if(fPS[0].size()>=nevts && fPS[1].size()>=nevts && fPS[2].size()>=nevts) break;
+  for(int i=0; i<NTHREADS; i++){
+    th[i] = thread(&TreeReaderPulse::ScanPSLoop1, this, i, ref(agata), nevts);
   }
-  cout<<"\r load "<<fPS[0].size()<<"__"<<fPS[1].size()<<"__"<<fPS[2].size()<<" / "<<nevts<<" pulse shape"<<endl;
 
-  sort(fPS[0].begin(),fPS[0].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
-  sort(fPS[1].begin(),fPS[1].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
-  sort(fPS[2].begin(),fPS[2].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
+  for(int i=0; i<NTHREADS; i++){
+    if(th[i].joinable())
+      th[i].join();
+  }
+#endif
+  
+  cout<<"\r load "<<fPSs[0].size()<<"__"<<fPSs[1].size()<<"__"<<fPSs[2].size()<<" / "<<nevts<<" pulse shape"<<endl;
+  
+  sort(fPSs[0].begin(),fPSs[0].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
+  sort(fPSs[1].begin(),fPSs[1].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
+  sort(fPSs[2].begin(),fPSs[2].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
 
   // output
   TFile *fout = new TFile("ComparePS.root","RECREATE");
+
+#ifdef REALPOS
+  TTree *postree[3];
+  for(int itype=0; itype<3; itype++)
+    postree[itype] = new TTree(Form("postree%d",itype),Form("PS position tree of type%d",itype));
+#endif
+  TTree *anatree[3];
+  for(int itype=0; itype<3; itype++)
+    anatree[itype] = new TTree(Form("tree%d",itype),Form("analyzed tree of type%d",itype));
+
+
+  
+#ifndef NTHREADS
+  for(int itype=0; itype<3; itype++)
+    ScanPSLoop2(0, postree[itype], anatree[itype], agata, nevts, Diff);
+
+#else
+  thread th2[NTHREADS];
+  cout<<"using "<<NTHREADS<<" threads:"<<endl;
+
+  for(int itype=0; itype<3; ){
+    for(int i=0; i<NTHREADS; i++){
+      if(itype<3)
+	th2[i] = thread(&TreeReaderPulse::ScanPSLoop2, this, itype, ref(postree[itype]), ref(anatree[itype]), ref(agata), nevts, Diff);
+      itype++;
+    }
+
+    for(int i=0; i<NTHREADS; i++){
+      if(th2[i].joinable())
+	th2[i].join();
+    }
+  }
+#endif
+  
+
+  fout->cd();
+#ifdef REALPOS
+  for(int itype=0; itype<3; itype++) postree[itype]->Write();
+#endif
+  for(int itype=0; itype<3; itype++) anatree[itype]->Write();
+  fout->Close();
+
+  return;
+}
+
+void TreeReaderPulse::ScanPSLoop1(int iChain, AGATA *agata, int nevts){
+  int run;
+  for(; irun<=MaxRun[0]; ){ // loop runs
+    if(kInterrupt) break;
+
+    {
+#ifdef NTHREADS
+      lock_guard<mutex> lock(treemtx); // lock tree read
+#endif
+      if(irun>MaxRun[0]) return;
+      run = irun;
+      irun++;
+    }
+
+    // initial tree
+    fChain[iChain]->Reset();
+    fChain[iChain]->AddFile(Form("%s/G4SimData%04d.root",path[0].c_str(),run),0,"tree");
+    int nentrytmp = fChain[iChain]->GetEntriesFast();
+    Init(iChain);
+
+    for(int ientry=0; ientry<nentrytmp; ientry++){ // loop evts
+      if(kInterrupt) break;
+
+      {
+#ifdef NTHREADS
+	lock_guard<mutex> lock(scanmtx); // lock scan
+#endif
+	if(ievt%10000==0) cout<<"\r load "<<fPSs[0].size()<<"__"<<fPSs[1].size()<<"__"<<fPSs[2].size()<<" / "<<nevts<<" pulse shape... ievt = "<<ievt<<flush;
+      }
+      
+      fChain[iChain]->GetEntry(ientry);
+      for(int idet=0; idet<obj[iChain].pdet->size(); idet++){
+	//if(obj[iChain].pdet->at(idet)!=tdet) continue;
+	int itype = obj[iChain].pdet->at(idet)%3;
+
+	int tmpnidx = -1, tmpnidxshift = 0;
+#ifdef NOISE
+	tmpnidx = (int)gRandom->Uniform(0,NOISE);
+	tmpnidxshift = (int)gRandom->Uniform(0,NOISE/(NSig*NSegCore));
+#endif
+	int segidx = -1;
+	PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift,false,segidx); // aps w/ PS
+	if(aps.det<0) continue;
+
+#ifdef SINGLEHIT
+	if(aps.nhits>1) continue;
+#endif
+	{
+#ifdef NTHREADS
+	  lock_guard<mutex> lock(scanmtx); // lock scan
+#endif
+	  if(fPSs[itype].size()<nevts) fPSs[itype].push_back(aps);
+	}
+      }
+
+      ievt++;
+
+      {
+#ifdef NTHREADS
+	lock_guard<mutex> lock(scanmtx); // lock scan
+#endif
+	if(fPSs[0].size()>=nevts && fPSs[1].size()>=nevts && fPSs[2].size()>=nevts){
+	  kInterrupt = 1;
+	  break;
+	}
+      }
+
+      
+    } // end of loop evts
+    
+  } // end of loop runs
+
+  return;  
+}
+
+
+void TreeReaderPulse::ScanPSLoop2(int itype, TTree *postree, TTree *anatree, AGATA *agata, int nevts, double Diff){
+  AGATAgeo* agatageo = agata->GetGeo();
 
   Int_t simseg;
   Int_t nhits1, nhits2;
@@ -188,13 +304,11 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts, double Diff){
       zero[iseg][isig] = 0;
 
 #ifdef REALPOS
-  TTree *postree = new TTree("postree","PS position tree");
   postree->Branch("simseg", &simseg, "simseg/I");
   postree->Branch("nhits", &nhits1, "nhits/I");
   postree->Branch("SimPos", SimPos, "SimPos[3]/F");
 #endif
 
-  TTree *anatree = new TTree("tree","analyzed tree");
   anatree->Branch("type", &itype, "type/I");
   anatree->Branch("simseg", &simseg, "simseg/I");
   anatree->Branch("SimPos", SimPos, "SimPos[3]/F");
@@ -229,136 +343,107 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts, double Diff){
 
   cout<<"start compare..."<<endl;
   float aspulse[NSig_comp], bspulse[NSig_comp];
-  for(itype=0; itype<3; itype++){
 
-    for(ievt=0; ievt<fPS[itype].size(); ievt++){
-      if(ievt%1000==0) cout<<"\r type "<<itype<<": finish "<<ievt<<" / "<<fPS[itype].size()<<" pulse..."<<flush;
+  int iievt;
+  for(iievt=0; iievt<fPSs[itype].size(); iievt++){
+    if(iievt%1000==0) cout<<"\r type "<<itype<<": finish "<<iievt<<" / "<<fPSs[itype].size()<<" pulse..."<<flush;
 
-      simseg = fPS[itype][ievt].seg;
-      Energy1 = fPS[itype][ievt].energy;
+    simseg = fPSs[itype][iievt].seg;
+    Energy1 = fPSs[itype][iievt].energy;
 
-      if(Energy1<PSCEMIN) continue;
+    if(Energy1<PSCEMIN) continue;
 
-      nhits1 = fPS[itype][ievt].nhits;
+    nhits1 = fPSs[itype][iievt].nhits;
+    if(nevts<=1000){
+      hiteng1.clear();
+      for(int ii=0; ii<fPSs[itype][iievt].hiteng.size(); ii++) hiteng1.push_back(fPSs[itype][iievt].hiteng[ii]);
+    }
+
+    TMatrixD SegPos(3,1);
+    SegPos = agatageo->GetLocalSegPos(itype,simseg);
+    TVector3 segvec(SegPos(0,0),SegPos(1,0),0);
+    float SegPhi = segvec.Phi()/TMath::Pi()*180;
+    float SegR   = segvec.Mag();
+    float SegZ   = SegPos(2,0);
+#ifdef REALPOS
+    for(int ix=0; ix<3; ix++) SimPos[ix] = fPSs[itype][iievt].detpos[ix];
+    TVector3 ivec(fPSs[itype][iievt].detpos[0],fPSs[itype][iievt].detpos[1],0);
+    PhiRZ1[0] = ivec.Phi()/TMath::Pi()*180;
+    PhiRZ1[1] = ivec.Mag();
+    PhiRZ1[2] = fPSs[itype][iievt].detpos[2];
+
+    Phi    = PhiRZ1[0];    
+    Radius = PhiRZ1[1];    
+    Z      = PhiRZ1[2];
+    PhiC   = Phi - SegPhi; if(PhiC>180) PhiC-=360; if(PhiC<-180) PhiC+=360;
+    ZC     = Z - SegZ;
+    postree->Fill();
+#endif
+
+    int fseg[NSeg_comp]; //0,1:fired seg, core; 2,3:next sectors; 4,5:next slice
+    agatageo->GetNextSegs(simseg, fseg);
+
+    for(int jevt = iievt+1; jevt<fPSs[itype].size(); jevt++){
+      if(simseg!=fPSs[itype][jevt].seg) break;
+
+      Energy2 = fPSs[itype][jevt].energy;
+      nhits2 = fPSs[itype][jevt].nhits;
       if(nevts<=1000){
-	hiteng1.clear();
-	for(int ii=0; ii<fPS[itype][ievt].hiteng.size(); ii++) hiteng1.push_back(fPS[itype][ievt].hiteng[ii]);
+	hiteng2.clear();
+	for(int jj=0; jj<fPSs[itype][jevt].hiteng.size(); jj++) hiteng2.push_back(fPSs[itype][jevt].hiteng[jj]);
       }
 
-      TMatrixD SegPos(3,1);
-      SegPos = agatageo->GetLocalSegPos(itype,simseg);
-      TVector3 segvec(SegPos(0,0),SegPos(1,0),0);
-      float SegPhi = segvec.Phi()/TMath::Pi()*180;
-      float SegR   = segvec.Mag();
-      float SegZ   = SegPos(2,0);
 #ifdef REALPOS
-      for(int ix=0; ix<3; ix++) SimPos[ix] = fPS[itype][ievt].detpos[ix];
-      TVector3 ivec(fPS[itype][ievt].detpos[0],fPS[itype][ievt].detpos[1],0);
-      PhiRZ1[0] = ivec.Phi()/TMath::Pi()*180;
-      PhiRZ1[1] = ivec.Mag();
-      PhiRZ1[2] = fPS[itype][ievt].detpos[2];
+      dist = 0;
+      for(int ix=0; ix<3; ix++) dist += pow(fPSs[itype][iievt].detpos[ix]-fPSs[itype][jevt].detpos[ix],2);
+      dist = sqrt(dist);
 
-      Phi    = PhiRZ1[0];    
-      Radius = PhiRZ1[1];    
-      Z      = PhiRZ1[2];
-      PhiC   = Phi - SegPhi; if(PhiC>180) PhiC-=360; if(PhiC<-180) PhiC+=360;
-      ZC     = Z - SegZ;
-      postree->Fill();
+      TVector3 jvec(fPSs[itype][jevt].detpos[0],fPSs[itype][jevt].detpos[1],0);
+      PhiRZ2[0] = jvec.Phi()/TMath::Pi()*180;
+      PhiRZ2[1] = jvec.Mag();
+      PhiRZ2[2] = fPSs[itype][jevt].detpos[2];
+
+      diffphi = PhiRZ1[0] - PhiRZ2[0];
+      if(diffphi>180)  diffphi-=360;
+      if(diffphi<-180) diffphi+=360;
+      diffphi = fabs(diffphi);
+      rdiffphi = (PhiRZ1[1]+PhiRZ2[1])/2*diffphi/180*TMath::Pi();
+      diffr = fabs(PhiRZ1[1] - PhiRZ2[1]);
+      diffz = fabs(PhiRZ1[2] - PhiRZ2[2]);
+
+      if(Diff>0){
+	double difflimit = 0.5;
+	int ndiff = 0;
+	if(diffr>difflimit) ndiff++;
+	if(diffz>difflimit) ndiff++;
+	if(rdiffphi>difflimit) ndiff++;
+	if(ndiff!=1) continue; // select data diff only in one dimension
+
+	ndiff = 0;
+	if(fabs(diffr-Diff)<0.2) ndiff++;
+	if(fabs(diffz-Diff)<0.2) ndiff++;
+	if(fabs(rdiffphi-Diff)<0.2) ndiff++;
+	if(ndiff!=1) continue; // select data only match Diff
+      }
 #endif
 
-      int fseg[NSeg_comp]; //0,1:fired seg, core; 2,3:next sectors; 4,5:next slice
-      agatageo->GetNextSegs(simseg, fseg);
+      nfired=0;
+      chi2 = 0;
+      for(int ix=0; ix<3; ix++) chi2s[ix]=0;
+      int uflg[NSegCore]; for(int iseg=0; iseg<NSegCore; iseg++) uflg[iseg]=0;
 
-      for(int jevt = ievt+1; jevt<fPS[itype].size(); jevt++){
-	if(simseg!=fPS[itype][jevt].seg) break;
-
-	Energy2 = fPS[itype][jevt].energy;
-	nhits2 = fPS[itype][jevt].nhits;
-	if(nevts<=1000){
-	  hiteng2.clear();
-	  for(int jj=0; jj<fPS[itype][jevt].hiteng.size(); jj++) hiteng2.push_back(fPS[itype][jevt].hiteng[jj]);
-	}
-
-#ifdef REALPOS
-	dist = 0;
-	for(int ix=0; ix<3; ix++) dist += pow(fPS[itype][ievt].detpos[ix]-fPS[itype][jevt].detpos[ix],2);
-	dist = sqrt(dist);
-
-	TVector3 jvec(fPS[itype][jevt].detpos[0],fPS[itype][jevt].detpos[1],0);
-	PhiRZ2[0] = jvec.Phi()/TMath::Pi()*180;
-	PhiRZ2[1] = jvec.Mag();
-	PhiRZ2[2] = fPS[itype][jevt].detpos[2];
-
-	diffphi = PhiRZ1[0] - PhiRZ2[0];
-	if(diffphi>180)  diffphi-=360;
-	if(diffphi<-180) diffphi+=360;
-	diffphi = fabs(diffphi);
-	rdiffphi = (PhiRZ1[1]+PhiRZ2[1])/2*diffphi/180*TMath::Pi();
-	diffr = fabs(PhiRZ1[1] - PhiRZ2[1]);
-	diffz = fabs(PhiRZ1[2] - PhiRZ2[2]);
-
-	if(Diff>0){
-	  double difflimit = 0.5;
-	  int ndiff = 0;
-	  if(diffr>difflimit) ndiff++;
-	  if(diffz>difflimit) ndiff++;
-	  if(rdiffphi>difflimit) ndiff++;
-	  if(ndiff!=1) continue; // select data diff only in one dimension
-
-	  ndiff = 0;
-	  if(fabs(diffr-Diff)<0.2) ndiff++;
-	  if(fabs(diffz-Diff)<0.2) ndiff++;
-	  if(fabs(rdiffphi-Diff)<0.2) ndiff++;
-	  if(ndiff!=1) continue; // select data only match Diff
-	}
-#endif
-
-	nfired=0;
-	chi2 = 0;
-	for(int ix=0; ix<3; ix++) chi2s[ix]=0;
-	int uflg[NSegCore]; for(int iseg=0; iseg<NSegCore; iseg++) uflg[iseg]=0;
-
-	for(int ix=0; ix<3; ix++){
-	  for(int ii=0; ii<2; ii++){
-	    int iseg = fseg[2*ix+ii];
-	    if(uflg[iseg]!=0) continue;
-	    if(nevts<=1000){
-	      copy_n(fPS[itype][ievt].opulse[iseg], NSig, pulse1[iseg]);
-	      copy_n(fPS[itype][jevt].opulse[iseg], NSig, pulse2[iseg]);
-	      copy_n(zero[iseg], NSig, chis[iseg]);
-	    }
-
-	    copy_n(fPS[itype][ievt].apulse[2*ix+ii], NSig_comp, aspulse);
-	    copy_n(fPS[itype][jevt].apulse[2*ix+ii], NSig_comp, bspulse);
-
-	    if(nevts<=1000){
-	      for(int isig=0; isig<NSig_comp; isig++){
-		chis[iseg][isig] = pow(aspulse[isig]-bspulse[isig],2); //SQ
-		float sigm = fabs(bspulse[isig]); if(sigm<0.01) sigm=0.01;
-		chis[iseg][isig] = chis[iseg][isig]/sigm; //chi2
-	      }
-	    }
-	  
-	    float tmpchi2 = agata->Chi2seg(aspulse, bspulse);
-	    chi2 += tmpchi2;
-	    chi2s[ix] += tmpchi2; // sum
-	    nfired++;
-
-	    uflg[iseg]=1;
-	  }
-	}
-
-	// compare other segments
-	for(int iseg=0; iseg<NSegCore; iseg++){
+      for(int ix=0; ix<3; ix++){
+	for(int ii=0; ii<2; ii++){
+	  int iseg = fseg[2*ix+ii];
 	  if(uflg[iseg]!=0) continue;
 	  if(nevts<=1000){
-	    copy_n(fPS[itype][ievt].opulse[iseg], NSig, pulse1[iseg]);
-	    copy_n(fPS[itype][jevt].opulse[iseg], NSig, pulse2[iseg]);
+	    copy_n(fPSs[itype][iievt].opulse[iseg], NSig, pulse1[iseg]);
+	    copy_n(fPSs[itype][jevt].opulse[iseg], NSig, pulse2[iseg]);
 	    copy_n(zero[iseg], NSig, chis[iseg]);
 	  }
 
-	  copy_n(fPS[itype][ievt].opulse[iseg], NSig_comp, aspulse);
-	  copy_n(fPS[itype][jevt].opulse[iseg], NSig_comp, bspulse);
+	  copy_n(fPSs[itype][iievt].apulse[2*ix+ii], NSig_comp, aspulse);
+	  copy_n(fPSs[itype][jevt].apulse[2*ix+ii], NSig_comp, bspulse);
 
 	  if(nevts<=1000){
 	    for(int isig=0; isig<NSig_comp; isig++){
@@ -367,32 +452,52 @@ void TreeReaderPulse::ScanPS(AGATA *agata, int nevts, double Diff){
 	      chis[iseg][isig] = chis[iseg][isig]/sigm; //chi2
 	    }
 	  }
-
+	  
 	  float tmpchi2 = agata->Chi2seg(aspulse, bspulse);
-	  //tmpchi2 = fPS[itype][ievt].segwgt[iseg]>0? tmpchi2*fPS[itype][ievt].segwgt[iseg] : tmpchi2*fPS[itype][jevt].segwgt[iseg];
-	  //if(tmpchi2>chi2) chi2=tmpchi2; // maximum
-	  chi2 += tmpchi2; // sum
+	  chi2 += tmpchi2;
+	  chi2s[ix] += tmpchi2; // sum
 	  nfired++;
 
 	  uflg[iseg]=1;
 	}
-	//if(nfired>0) chi2 = chi2/nfired;
-
-	anatree->Fill();
       }
-    
+
+      // compare other segments
+      for(int iseg=0; iseg<NSegCore; iseg++){
+	if(uflg[iseg]!=0) continue;
+	if(nevts<=1000){
+	  copy_n(fPSs[itype][iievt].opulse[iseg], NSig, pulse1[iseg]);
+	  copy_n(fPSs[itype][jevt].opulse[iseg], NSig, pulse2[iseg]);
+	  copy_n(zero[iseg], NSig, chis[iseg]);
+	}
+
+	copy_n(fPSs[itype][iievt].opulse[iseg], NSig_comp, aspulse);
+	copy_n(fPSs[itype][jevt].opulse[iseg], NSig_comp, bspulse);
+
+	if(nevts<=1000){
+	  for(int isig=0; isig<NSig_comp; isig++){
+	    chis[iseg][isig] = pow(aspulse[isig]-bspulse[isig],2); //SQ
+	    float sigm = fabs(bspulse[isig]); if(sigm<0.01) sigm=0.01;
+	    chis[iseg][isig] = chis[iseg][isig]/sigm; //chi2
+	  }
+	}
+
+	float tmpchi2 = agata->Chi2seg(aspulse, bspulse);
+	//tmpchi2 = fPSs[itype][iievt].segwgt[iseg]>0? tmpchi2*fPSs[itype][iievt].segwgt[iseg] : tmpchi2*fPSs[itype][jevt].segwgt[iseg];
+	//if(tmpchi2>chi2) chi2=tmpchi2; // maximum
+	chi2 += tmpchi2; // sum
+	nfired++;
+
+	uflg[iseg]=1;
+      }
+      //if(nfired>0) chi2 = chi2/nfired;
+
+      anatree->Fill();
     }
-    cout<<"\r type "<<itype<<": finish "<<ievt<<" / "<<fPS[itype].size()<<" pulse..."<<endl;
     
-  }// loop itype
-
-  fout->cd();
-#ifdef REALPOS
-  postree->Write();
-#endif
-  anatree->Write();
-  fout->Close();
-
+  }
+  cout<<"\r type "<<itype<<": finish "<<iievt<<" / "<<fPSs[itype].size()<<" pulse..."<<endl;
+  
   return;
 }
 
