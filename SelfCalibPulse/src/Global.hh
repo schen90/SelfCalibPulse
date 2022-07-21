@@ -23,7 +23,7 @@ using namespace std;
 #define PSA // PSA to assign initial pos
 #define MINUIT2
 //#define MULTISEG // include multi-segment events
-#define CHECKTRACK
+//#define CHECKTRACK // check track using OFT tacking
 //#define SINGLEHIT
 #define REALPOS
 //#define ADDPS // input G4Tree noPS, addPS from db
