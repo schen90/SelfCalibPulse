@@ -101,6 +101,16 @@ public:
   void ReadPSAbasis();
   TVector3 GetPSpos(int detid, int segid, PS *aps);
   
+  // Chi2sLimit Map
+  void LoadGridChi2sMap(string Mapfile){
+    cout<<"Use Chi2sLimit Map from "<<Mapfile<<endl;
+    agatageo->LoadGridChi2sMap(Mapfile);
+    kMap = true;
+  }
+
+  void GetPSChi2sLimit(int detid, int segid, PS *aps, float chi2slimit[]);
+
+
   // Check Memory
   void SetMaxMemUsage(double value){ MaxMemUsage = value;}
   Double_t GetTotalSystemMemory();
@@ -117,6 +127,7 @@ private:
   AGATAgeo *agatageo;
 
   Double_t MaxMemUsage = 50; // max memory usage %
+  bool kMap = false;
   bool kPSA = false;
   bool kWithPS = true;
   bool kGroupPos = false;

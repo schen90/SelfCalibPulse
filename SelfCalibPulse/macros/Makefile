@@ -1,7 +1,7 @@
-TARGET = MakePSBase
+#TARGET = MakePSBase
 #TARGET = MakePSBaseChi2
 #TARGET = MakePSBaseRealPS
-#TARGET = MakePSBasePSC
+TARGET = MakePSBasePSC
 
 ROOTCFLAGS  = $(shell root-config --cflags)
 ROOTLIBS    = $(shell root-config --libs) -lMinuit

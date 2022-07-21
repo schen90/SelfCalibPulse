@@ -20,7 +20,7 @@ using namespace std;
 #define ONECLUST // make one cluster in tracking
 #define TRACKINGTREE // ouput tracking results
 #define WITHPS //comment out to save memory
-//#define PSA // PSA to assign initial pos
+#define PSA // PSA to assign initial pos
 #define MINUIT2
 //#define MULTISEG // include multi-segment events
 #define CHECKTRACK

@@ -110,7 +110,7 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 	nhits = fHCs[idet][iseg]->at(ic)->GetSize();
 
 	Marker = fHCs[idet][iseg]->at(ic)->Marker;
-	for(int ix=0; ix<3; ix++) chi2limit[ix] = fHCs[idet][iseg]->at(ic)->MaxChi2s[ix];
+	for(int ix=0; ix<3; ix++) chi2limit[ix] = fHCs[idet][iseg]->at(ic)->MaxChi2s[ix]*fHCs[idet][iseg]->at(ic)->chi2scales[ix];
 	
 	TVector3 vtmp;
 
@@ -1422,6 +1422,7 @@ Double_t AGATA::AddPStoPSC(PS *aps, Hit *ahit, vector<int> &entrylist){
   float maxchi2s[3];
   float dymaxchi2 = MaxChi2;
   float dymaxchi2s[3] = {MaxChi2s[0], MaxChi2s[1], MaxChi2s[2]};
+  float minscale = 1.;
   Double_t minchi2 = 1e9;
 
   int level = ahit->GetLevel();
@@ -1441,33 +1442,51 @@ Double_t AGATA::AddPStoPSC(PS *aps, Hit *ahit, vector<int> &entrylist){
     if(ahit->InHitCollection(fHCs[detid][segid]->at(ipsc))) continue; // skip if already in HC
     
     // dynamic chi2 range from HC
-    if(kGroupPos) maxchi2 = fHCs[detid][segid]->at(ipsc)->MaxChi2s[0];
-    else{
-      for(int ix=0; ix<3; ix++) maxchi2s[ix] = fHCs[detid][segid]->at(ipsc)->MaxChi2s[ix];
+    float chi2scale;
+    float chi2scales[3];
+    if(kGroupPos){
+      maxchi2 = fHCs[detid][segid]->at(ipsc)->MaxChi2s[0];
+      chi2scale = fHCs[detid][segid]->at(ipsc)->chi2scales[0];
+    }else{
+      for(int ix=0; ix<3; ix++){
+	maxchi2s[ix] = fHCs[detid][segid]->at(ipsc)->MaxChi2s[ix];
+	chi2scales[ix] = fHCs[detid][segid]->at(ipsc)->chi2scales[ix];
+      }
     }
-      
+    
     float chi2;
     float chi2s[3];
     if(kGroupPos) chi2 = Dist(aps,&fPSC[detid][segid][ipsc]); // group according to real position
-    else          chi2 = Chi2Fast3D(aps,&fPSC[detid][segid][ipsc],MaxChi2s,chi2s,true);
-    //else          chi2 = Chi2Fast(aps,&fPSC[detid][segid][ipsc],MaxChi2,true);
+    else          chi2 = Chi2Fast3D(aps,&fPSC[detid][segid][ipsc],maxchi2s,chi2s,true);
+    //else          chi2 = Chi2Fast(aps,&fPSC[detid][segid][ipsc],maxchi2,true);
 
     if(chi2<minchi2) minchi2 = chi2;
 
-    if((kGroupPos && chi2<MaxChi2) ||
-       (!kGroupPos && chi2s[0]<MaxChi2s[0] && chi2s[1]<MaxChi2s[1] && chi2s[2]<MaxChi2s[2])){ // within initial chi2 range
+    if((kGroupPos && chi2<maxchi2) ||
+       (!kGroupPos &&
+	chi2s[0]<maxchi2s[0] &&
+	chi2s[1]<maxchi2s[1] &&
+	chi2s[2]<maxchi2s[2])){ // within initial chi2 range
 
       // get min dynamic chi2 range for new PSC
       if(kGroupPos){
-	if(maxchi2<dymaxchi2) dymaxchi2 = maxchi2;
+	if((maxchi2*chi2scale)<dymaxchi2) dymaxchi2 = maxchi2*chi2scale;
+	minscale = min(minscale,chi2scale);
       }else{
-	for(int ix=0; ix<3; ix++)
-	  if(maxchi2s[ix]<dymaxchi2s[ix]) dymaxchi2s[ix] = maxchi2s[ix];
+	for(int ix=0; ix<3; ix++){
+	  if((maxchi2s[ix]*chi2scales[ix])<dymaxchi2s[ix] || dymaxchi2s[ix]==MaxChi2s[ix]){
+	    dymaxchi2s[ix] = maxchi2s[ix]*chi2scales[ix];
+	    minscale = min(minscale,chi2scales[ix]);
+	  }
+	}
       }
       
       // add to PSC
-      if((kGroupPos && chi2<maxchi2) ||
-	 (!kGroupPos && chi2s[0]<maxchi2s[0] && chi2s[1]<maxchi2s[1] && chi2s[2]<maxchi2s[2])){ // within dynamic chi2 range
+      if((kGroupPos && chi2<(maxchi2*chi2scale)) ||
+	 (!kGroupPos &&
+	  chi2s[0]<(maxchi2s[0]*chi2scales[0]) &&
+	  chi2s[1]<(maxchi2s[1]*chi2scales[1]) &&
+	  chi2s[2]<(maxchi2s[2]*chi2scales[2]))){ // within dynamic chi2 range
 
 	entrylist.push_back(fPSC[detid][segid][ipsc].index);
 
@@ -1601,11 +1620,24 @@ Double_t AGATA::AddPStoPSC(PS *aps, Hit *ahit, vector<int> &entrylist){
       }
     }
 #endif
+
+    // chi2slimit map
+    if(kMap && minscale==1.){
+      float tmpmaxchi2s[3];
+      GetPSChi2sLimit(detid, segid, aps, tmpmaxchi2s);
+      for(int ix=0; ix<3; ix++)
+	if(tmpmaxchi2s[ix]>0)
+	  dymaxchi2s[ix] = tmpmaxchi2s[ix];
+    }
     
     if(kGroupPos){
       ahc->MaxChi2s[0] = dymaxchi2;
+      ahc->chi2scales[0] = 1.;
     }else{
-      for(int ix=0; ix<3; ix++) ahc->MaxChi2s[ix] = dymaxchi2s[ix];
+      for(int ix=0; ix<3; ix++){
+	ahc->MaxChi2s[ix] = dymaxchi2s[ix];
+	ahc->chi2scales[ix] = 1.;
+      }
     }
     ahc->AddHit(ahit);
     ahit->AddHitCollection(ahc);
@@ -1754,8 +1786,8 @@ void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
 
 
 void AGATA::DividePSC(HitCollection *ahc, double factor){ // divide ahc by reduced chi2s 
-  for(int ix=0; ix<3; ix++) ahc->MaxChi2s[ix] = ahc->MaxChi2s[ix]*factor;
-  ahc->MaxChi2s[1] = ahc->MaxChi2s[1]*factor;
+  for(int ix=0; ix<3; ix++) ahc->chi2scales[ix] = ahc->chi2scales[ix]*factor;
+  ahc->chi2scales[1] = ahc->chi2scales[1]*factor;
   
   int detid = ahc->GetDet();
   int segid = ahc->GetSeg();
@@ -2373,7 +2405,7 @@ void AGATA::ExecFitLoop(int it){
 
     // optimize aHC position
     if(aHC->GetPaths()->size()<4) continue;
-    if(kPSA && aHC->GetPaths()->size()<50) continue; // if PSA used for initial hit pos, then only optimize for HC with npaths>50
+    //if(kPSA && aHC->GetPaths()->size()<50) continue; // if PSA used for initial hit pos, then only optimize for HC with npaths>50
     
     // Set the free variables to be minimized!
     TVector3 initValue = aHC->GetPosition();
@@ -2623,6 +2655,53 @@ TVector3 AGATA::GetPSpos(int detid, int segid, PS *aps){
 }
 
 
+
+void AGATA::GetPSChi2sLimit(int detid, int segid, PS *aps, float chi2slimit[]){
+
+  int itype = detid%3;
+  int ipos = -1;
+
+#ifdef PSA
+#ifdef WITHPS
+
+  int npoint = fPSAbasis[itype][segid].size();
+  float minchi2 = 1e9;
+  float asegpulse[NSig_comp], bsegpulse[NSig_comp];
+  // compare fired seg, core and neighbor segment
+  for(int ipoint=0; ipoint<npoint; ipoint++){
+
+    float chi2=0;
+    for(int iseg=0; iseg<NSeg_comp; iseg++){
+      copy_n( aps->apulse[iseg], NSig_comp, asegpulse);
+      copy_n(fPSAbasis[itype][segid][ipoint].spulse[iseg], NSig_comp, bsegpulse);
+      float tmpchi2 = Chi2seg(asegpulse, bsegpulse);
+      chi2 += tmpchi2; // sum
+
+      if(chi2>minchi2) break; // interrupt if exceed minchi2
+    }
+
+    if(chi2<minchi2){
+      minchi2 = chi2;
+      ipos = ipoint;
+    }
+
+  }
+
+#endif
+#endif
+
+  if(ipos>0){
+    // chi2slimit from PSA pos
+    double detpos[3];
+    for(int ix=0; ix<3; ix++) detpos[ix] = fPSAbasis[itype][segid][ipos].pos[ix];
+    agatageo->GetChi2sLimit(detid, detpos, chi2slimit);
+  }
+  
+  return;
+}
+
+
+
 //oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo
 // tree and file
 //oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo
@@ -2705,4 +2784,7 @@ Double_t AGATA::GetCurrentMemoryUsage(){
   return ((Double_t) resident) * page_size;
 }
 
+
 #endif // #ifndef AGATA_CC
+
+

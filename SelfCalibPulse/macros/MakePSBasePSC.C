@@ -23,19 +23,9 @@ using namespace std;
 
 bool kextrapol = true;
 
-const int nsig = 121;
+const int nsig = 56;
 const int nseg = 36;
 const int nsegcore = 37;
-
-double griddist  = 2; // 2mm grid
-double maxdist = 2.0; // max dist in one axis to assign a selfcalib point to grid
-double range[3][2];
-const int MaxSteps = 50;
-int imap[MaxSteps][MaxSteps][MaxSteps];
-
-// pulsedb
-vector<int>      dbseg;
-vector<TMatrixD> dbpos;
 
 // selfcalib
 vector<int> calibseg;
@@ -44,7 +34,7 @@ vector<TMatrixD> calibpulse;
 
 
 // main
-void MakePSBasePSC(string DBPosfile, string PSCfile, string Basefile){
+void MakePSBasePSC(string PSCfile, string Basefile){
 
   // load calib pscfile
   TChain *tree = new TChain();
@@ -69,9 +59,9 @@ void MakePSBasePSC(string DBPosfile, string PSCfile, string Basefile){
   for(ientry=0; ientry<nentries; ientry++){
     if(ientry%1000==0) cout<<"\r finish "<<ientry<<" / "<<nentries<<" points from PSC"<<flush;
     tree->GetEntry(ientry);
-    seg = seg+1; // seg in db start from 1...
+    //seg = seg+1; // seg in db start from 1...
     
-    if(npaths<=30) continue;
+    if(npaths<=100) continue;
 
     TMatrixD tmppos(3,1);
     for(int ix=0; ix<3; ix++){
@@ -90,18 +80,16 @@ void MakePSBasePSC(string DBPosfile, string PSCfile, string Basefile){
   cout<<"\r finish "<<ientry<<" / "<<nentries<<" points from PSC"<<endl;
 
   // output
-  double pos[3];
-  double core[121];
-  double segpulse[4356];
+  float pos[3];
+  float ospulse[nsig*nsegcore];
   
   TFile *fout = new TFile(Basefile.c_str(),"RECREATE");
-  TTree *outtree = new TTree("tree","SelfCalib Grid Base");
+  TTree *outtree = new TTree("tree","SelfCalib Base");
 
   outtree->Branch("det",&det);
   outtree->Branch("seg",&seg);
-  outtree->Branch("pos",pos,"pos[3]/D");
-  outtree->Branch("core",core,"core[121]/D");
-  outtree->Branch("spulse",segpulse,"spulse[4356]/D");
+  outtree->Branch("pos",pos,"pos[3]/F");
+  outtree->Branch("spulse",ospulse,Form("spulse[%d]/F",nsig*nsegcore));
 
   // output at PSC position
   int npos = calibpos.size();
@@ -114,8 +102,7 @@ void MakePSBasePSC(string DBPosfile, string PSCfile, string Basefile){
       pos[ix] = calibpos[ipos](ix,0);
     }
 
-    for(int isig=0; isig<121; isig++) core[isig] = calibpulse[ipos](4356+isig,0);
-    for(int isig=0; isig<4356; isig++) segpulse[isig] = calibpulse[ipos](isig,0);
+    for(int isig=0; isig<nsig*nsegcore; isig++) ospulse[isig] = calibpulse[ipos](isig,0);
     
     outtree->Fill();
   }
@@ -131,11 +118,13 @@ void MakePSBasePSC(string DBPosfile, string PSCfile, string Basefile){
 
 #ifndef __CINT__
 int main(int argc, char *argv[]){
-  if(argc>3){
-    MakePSBasePSC(string(argv[1]), string(argv[2]), string(argv[3]));
-  }else{
-    MakePSBasePSC("G4Sim/pulsedb/pulseA.root", "PSCfiles/runMix/run31/it1/Det0000_fit4.root", "PSBase/Det0000_PSC.root");
-  }
+  string PSCfilename = "PSCfiles/Det0000.root";
+  string PSBasename = "PSBase/Det0000.root";
+
+  if(argc>2) PSBasename = string(argv[2]);
+  if(argc>1) PSCfilename = string(argv[1]);
+
+  MakePSBasePSC(PSCfilename, PSBasename);
   return 0;
 }
 #endif

@@ -90,6 +90,7 @@ public:
 #endif
 
   float MaxChi2s[3]; // chi2 range for the group
+  float chi2scales[3];
   int Marker;
   
 private:

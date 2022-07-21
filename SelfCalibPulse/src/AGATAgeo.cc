@@ -122,6 +122,67 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
 }
 
 
+void AGATAgeo::LoadGridChi2sMap(string gridmapfile){
+  const int kMaxBufLen = 500;
+  ifstream fin(gridmapfile.c_str());
+  if(!fin){ cerr<<"cannot open map file: "<<gridmapfile<<" !!!"<<endl; return;}
+
+  cout<<"\e[1;32m read chi2slimit map at grid point \e[0m"<<endl;
+  char *buffer = new char[kMaxBufLen];
+
+  // init
+  for(int itype=0; itype<NType; itype++){
+    for(int ix=0; ix<GridMaxSteps; ix++)
+      for(int iy=0; iy<GridMaxSteps; iy++)
+        for(int iz=0; iz<GridMaxSteps; iz++){
+          gridchi2smap[itype][ix][iy][iz][0] = -1;
+          gridchi2smap[itype][ix][iy][iz][1] = -1;
+          gridchi2smap[itype][ix][iy][iz][2] = -1;
+        }
+  }
+
+  // read Map
+  while(!fin.eof()){
+    fin.getline(buffer,kMaxBufLen);
+    if(strncmp(buffer,"#Map",4)==0){
+      cout<<"reading Map"<<endl;
+      fin.getline(buffer,kMaxBufLen);
+      int itype, iseg, ipos[3];
+      double pos[3],chi2slimit[3];
+      while(1){
+        fin >> itype >> iseg >> pos[0] >> pos[1] >> pos[2];
+        if(itype==-1) break;
+
+	for(int iaxis=0; iaxis<3; iaxis++){
+	  if(pos[iaxis]-GridRange[itype][iaxis][0]<-0.1 ||
+             pos[iaxis]-GridRange[itype][iaxis][1]>0.1){
+            cout<<Form("axis%d: %.3f outside range %.3f ~ %.3f",iaxis,pos[iaxis],GridRange[itype][iaxis][0],GridRange[itype][iaxis][1])<<endl;
+            ipos[iaxis] = -1;
+          }else{
+            ipos[iaxis] = (int)((pos[iaxis] - GridRange[itype][iaxis][0]) / GridDist + 0.5);
+            if(fabs(pos[iaxis]-(GridRange[itype][iaxis][0]+GridDist*ipos[iaxis]))>0.1){
+              cout<<Form("axis%d: %.3f not a grid point",iaxis,pos[iaxis])<<endl;
+              ipos[iaxis] = -1;
+            }
+          }
+	}
+
+	for(int i=0; i<3; i++) fin>>chi2slimit[i];
+        if(ipos[0]<0 || ipos[1]<0 || ipos[2]<0) continue;
+        for(int i=0; i<3; i++){
+          gridchi2smap[itype][ipos[0]][ipos[1]][ipos[2]][i] = chi2slimit[i];
+        }
+	
+      }
+    }
+
+  }
+  fin.close();
+  return;
+}
+
+
+
 void AGATAgeo::LoadMatrix(string LookUpTable){
   // find input LookUpTable
   ifstream fin;
@@ -371,6 +432,21 @@ bool AGATAgeo::CheckBounds(int detid, int segid, const double *lpos){
   if(segid!=GridSeg[itype][ipoint]) return false;
 
   return true;
+}
+
+
+void AGATAgeo::GetChi2sLimit(int detid, const double *dpos, float chi2slimit[]){
+  int itype = detid%3;
+
+  int idx[3];
+  for(int ix=0; ix<3; ix++){
+    idx[ix] = (int)((dpos[ix]-GridRange[itype][ix][0]) / GridDist + 0.5);
+    if(idx[ix]<0 || idx[ix]>GridMaxSteps-1) return;
+  }
+
+  for(int ix=0; ix<3; ix++) chi2slimit[ix] = gridchi2smap[itype][idx[0]][idx[1]][idx[2]][ix];
+
+  return;
 }
 
 

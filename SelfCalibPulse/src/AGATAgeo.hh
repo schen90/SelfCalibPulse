@@ -21,19 +21,24 @@ public:
 
   Int_t GetNDets(){ return NDets;}
   void LoadGrid(Int_t itype, string gridfile = "pulsedb/LibTrap_A001.root");
+  void LoadGridChi2sMap(string gridmapfile = "Map/MapGrid.dat");
+  
   void LoadMatrix(string LookUpTable = "LookUp/CrystalPositionLookUpTable");
   TMatrixD Lab2DetPos(Int_t idet, TMatrixD LabPos);
   TMatrixD Det2LabPos(Int_t idet, TMatrixD DetPos);
+
   void MakeSegPos();
   void LoadSegPos(string SegPosTable = "LookUp/SegPosTable");
   TMatrixD GetSegPos(Int_t idet, Int_t seg){ return SegPos[idet][seg];}
   TMatrixD GetLocalSegPos(Int_t itype, Int_t seg){ return LocalSegPos[itype][seg];}
+
   void MakeSegmentMap();
   void LoadNextSegTable(string NextSegTable = "LookUp/NextSegTable");
   void GetNextSegs(Int_t iseg, Int_t *fseg);
   Float_t GetSegWeight(Int_t iseg, Int_t iiseg){ return SegWeight[iseg][iiseg];}
   
   bool CheckBounds(int detid, int segid, const double *lpos);
+  void GetChi2sLimit(int detid, const double *dpos, float chi2slimit[]);
 
 private:
   // grid pos and seg
@@ -42,6 +47,8 @@ private:
   vector<Int_t> GridSeg[NType];
   Int_t    NSegGrid[NType][NSeg];
   TMatrixD LocalSegPos[NType][NSeg];
+
+  float gridchi2smap[NType][GridMaxSteps][GridMaxSteps][GridMaxSteps][3];
 
   // transform matrix
   TMatrixD Rt[MaxNDets];
