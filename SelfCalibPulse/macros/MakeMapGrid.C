@@ -209,9 +209,9 @@ void MakeMapGrid(int itype, int ichi2, string PSfile){
       cout<<"\r finish "<<ievt<<" / "<<nentries<<" events..."<<flush;
     tree->GetEntry(ievt);
 
-    if(ichi2==0) if(diffr<1)    continue;
-    if(ichi2==1) if(rdiffphi<1) continue;
-    if(ichi2==2) if(diffz<1)    continue;
+    if(ichi2==0) if(diffr<0.5)    continue;
+    if(ichi2==1) if(rdiffphi<0.5) continue;
+    if(ichi2==2) if(diffz<0.5)    continue;
     
     for(int iz=0; iz<MaxSteps; iz++){
       int nextz = 0;
@@ -273,8 +273,8 @@ int main(int argc, char *argv[]){
   time(&start);
 
   int ichi2 = 1;
-  string PSfile = "ComparePS3_Noise_D2.root";
-  string Mapfile = "Map/MapGrid.dat";
+  string PSfile = "ComparePS3_Noise_D1.root";
+  string Mapfile = "Map/MapGridNoiseD1.dat";
   
   if(argc>3) Mapfile = string(argv[3]);
   if(argc>2) PSfile = string(argv[2]);
