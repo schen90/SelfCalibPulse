@@ -24,7 +24,7 @@ void help(){
       <<setw(30)<<left<<" -init"<<" : initial folders for selfcalib"<<endl
       <<setw(30)<<left<<" -gp i"<<" : group pulse shape for det i.  i=-1 : all det"<<endl
       <<setw(30)<<left<<" -PSA"<<" : PSA to assign initial hit pos"<<endl
-      <<setw(30)<<left<<" -Map"<<" : chi2s limit map for group pulse"<<endl
+      <<setw(30)<<left<<" -Map chi2mapfile scale"<<" : chi2s limit map for group pulse"<<endl
       <<setw(30)<<left<<" -comb"<<" : combine Hit files for every run"<<endl
       <<setw(30)<<left<<" -Fit"<<" : Fit HCs pos"<<endl
       <<setw(30)<<left<<" -loop Ntrack Nfit"<<" : set iterate Ntrack Nfit"<<endl
@@ -61,7 +61,9 @@ int main(int argc, char* argv[]){
   string PSCPath = "PSCfiles";
   int MaxEvts = -1;
   double Diff = -1;
-
+  string chi2mapfile;
+  float chi2scale = 1;
+  
   if(argc==1){
     help();
     return 0;
@@ -83,6 +85,8 @@ int main(int argc, char* argv[]){
       kPSA = true;
     }else if(TString(argv[i]) == "-Map"){
       kMAP = true;
+      chi2mapfile = string(argv[++i]);
+      chi2scale = atof(argv[++i]);
     }else if(TString(argv[i]) == "-comb"){
       kComb = true;
     }else if(TString(argv[i]) == "-Fit"){
@@ -194,15 +198,13 @@ int main(int argc, char* argv[]){
   cout<<Form("With noise Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
   cout<<Form("PSCEmin = %.0f keV",PSCEMIN)<<endl;
 
-  if(kMAP) agata->LoadGridChi2sMap("Map/MapGridNoise.dat");
 #else
   double chi2slimit[3] = {0.5,0.1,0.3}; // group pulse shape with chi2s[3] w/o noise
   agata->SetMaxChi2s(chi2slimit[0],chi2slimit[1],chi2slimit[2]);
   cout<<Form("Without noise, Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
 
-  if(kMAP) agata->LoadGridChi2sMap("Map/MapGrid.dat");
 #endif
-
+  if(kMAP) agata->LoadGridChi2sMap(chi2mapfile.c_str(), chi2scale);
   
 
   //*****************************************//

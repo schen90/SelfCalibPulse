@@ -102,9 +102,9 @@ public:
   TVector3 GetPSpos(int detid, int segid, PS *aps);
   
   // Chi2sLimit Map
-  void LoadGridChi2sMap(string Mapfile){
-    cout<<"Use Chi2sLimit Map from "<<Mapfile<<endl;
-    agatageo->LoadGridChi2sMap(Mapfile);
+  void LoadGridChi2sMap(string Mapfile, float scale){
+    cout<<"Use Chi2sLimit Map from "<<Mapfile<<" scale "<<scale<<endl;
+    agatageo->LoadGridChi2sMap(Mapfile, scale);
     kMap = true;
   }
 

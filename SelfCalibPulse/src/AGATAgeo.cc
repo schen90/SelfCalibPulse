@@ -122,7 +122,7 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
 }
 
 
-void AGATAgeo::LoadGridChi2sMap(string gridmapfile){
+void AGATAgeo::LoadGridChi2sMap(string gridmapfile, float scale){
   const int kMaxBufLen = 500;
   ifstream fin(gridmapfile.c_str());
   if(!fin){ cerr<<"cannot open map file: "<<gridmapfile<<" !!!"<<endl; return;}
@@ -170,6 +170,7 @@ void AGATAgeo::LoadGridChi2sMap(string gridmapfile){
 	for(int i=0; i<3; i++) fin>>chi2slimit[i];
         if(ipos[0]<0 || ipos[1]<0 || ipos[2]<0) continue;
         for(int i=0; i<3; i++){
+	  if(chi2slimit[i]>0) chi2slimit[i] *= scale;
           gridchi2smap[itype][ipos[0]][ipos[1]][ipos[2]][i] = chi2slimit[i];
         }
 	
