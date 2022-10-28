@@ -1481,9 +1481,41 @@ void AGATA::FindInitZone(PS *aps, vector<int> *initzone){
   return;
 }
 
+
+void AGATA::FindInitPSC(Hit *ahit, vector<int> *initpsc){
+
+  TVector3 HitPos = ahit->GetPosition(); // hit pos in lab frame from PSA
+
+  int detid = ahit->GetDetectorID();
+  int segid = ahit->GetSegmentID();
+
+#ifdef NTHREADS
+  lock_guard<mutex> lock(PSCmtx[detid][segid]); // lock PSC for one segment
+#endif
+
+  for(HitCollection* ahc : *fHCs[detid][segid]){
+    TVector3 HCPos = ahc->GetInitPosition();
+    float dist = (HitPos-HCPos).Mag();
+    if(dist<RADIUS0) initpsc->push_back(ahc->GetPid());
+  }
+
+  return;
+}
+
+
 int AGATA::AddPS(PS *aps, Hit *ahit){
-  vector<int> *initzone = new vector<int>();
-  FindInitZone(aps, initzone); // find all init zone the PS belong to
+  vector<int> *initpsc = new vector<int>();
+
+  bool findpos = false;
+#ifdef PSA
+  if(kPSA) findpos = true;
+#endif
+
+  if(findpos){
+    FindInitPSC(ahit, initpsc);
+  }else{
+    FindInitZone(aps, initpsc); // find all init zone the PS belong to
+  }
 
   int detid = aps->det;
   int segid = aps->seg;
@@ -1492,14 +1524,25 @@ int AGATA::AddPS(PS *aps, Hit *ahit){
   lock_guard<mutex> lock(PSCmtx[detid][segid]); // lock PSC for one segment
 #endif
 
-  while(fPSC[detid][segid]->size()<27){
-    int tmp = InitPSCandHC(detid, segid);
+  if(findpos){
+    if(initpsc->size()<1){
+      int tmp = InitPSCandHC(detid, segid);
+      TVector3 LabPos = ahit->GetPosition();
+      Float_t hitpos[3];
+      hitpos[0] = LabPos.X();  hitpos[1] = LabPos.Y();  hitpos[2] = LabPos.Z();
+      fHCs[detid][segid]->at(tmp)->SetInitPosition(hitpos);
+      initpsc->push_back(tmp);
+    }
+  }else{
+    while(fPSC[detid][segid]->size()<27){
+      int tmp = InitPSCandHC(detid, segid);
+    }
   }
 
   cPStotal++;
   int tmp;
-  for(int i=0; i<initzone->size(); i++){
-    tmp = AddPStoPSC(aps, ahit, initzone->at(i));
+  for(int i=0; i<initpsc->size(); i++){
+    tmp = AddPStoPSC(aps, ahit, initpsc->at(i));
   }
   return tmp;
 }
@@ -2748,7 +2791,7 @@ TVector3 AGATA::GetPSpos(int detid, int segid, PS *aps){
 #endif
 
   TVector3 pos;
-  if(ipos>0){
+  if(ipos>-1){
     // initial pos from PSA
     TMatrixD DetPos(3,1);
     for(int ix=0; ix<3; ix++) DetPos(ix,0) = fPSAbasis[itype][segid][ipos].pos[ix];

@@ -109,7 +109,7 @@ int main(int argc, char* argv[]){
 #ifdef ADDPS
     cout<<"AddPS; ";
 #endif
-    if(kPSA) cout<<"PSA; ";
+    if(kPSA) cout<<"PSA Radius0 "<<RADIUS0<<"; ";
   }
 
   if(kComb) cout<<"Combine Hitfiles; ";
