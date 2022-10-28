@@ -24,7 +24,6 @@ HitCollection::HitCollection(Int_t detid, Int_t segid, Int_t pscid,
   paths = new vector<Path*>();
   phits = new vector<Hit*>();
 
-  Marker = 1;
 }
 
 HitCollection::~HitCollection() {

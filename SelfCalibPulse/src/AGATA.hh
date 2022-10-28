@@ -19,6 +19,7 @@
 #include "Hit.hh"
 #include "EventHits.hh"
 #include "HitCollection.hh"
+#include "PSC.hh"
 #include "Path.hh"
 #include "Tracker.hh"
 
@@ -42,7 +43,7 @@ public:
   void LoadPSCfiles(); // load all Pulse Shape Collection in memory
   void LoadPSCfiles(int detid); // load Pulse Shape Collection in memory, detid=-1 all dets
   void ClearPSCMem(); // clear PSC in memory
-  void GetPSCstat(int *PSCstat); // get Pulse Shape Collection state
+  void GetPSCstat(long long *PSCstat); // get Pulse Shape Collection state
 
   void WriteHCfiles();
   void WriteHCfiles(int detid);
@@ -59,31 +60,40 @@ public:
   void ClearEvtHitsMem(); // clear EventHits in memory
 
   // Pulse Shape Collection
-  void SetAddNewPSC(bool val);
-  bool IsNewPSC(); // if new PSC added
-
+  void SetAddNewPSC(bool val){ 
+    if(kAddNewPSC!=val){
+      cout<<endl<<"SetAddNewPSC "<<val<<endl;
+      kAddNewPSC = val;
+    }
+  }
   void SortPSC(); // sort PSC increasing ientry
-  Double_t AddPStoPSC(PS *aps, Hit *ahit, vector<int> &entrylist);
+  int  FindHC(int detid, int segid, int pscid);
+
+  int   InitPSCandHC(int detid, int segid);
+  void  FindInitZone(PS *aps, vector<int> *initzone);
+  int   AddPS(PS *aps, Hit *ahit);
+  int   AddPStoPSC(PS *aps, Hit *ahit, int ipsc);
+  float FindMaxDev(PS *aps, Hit *ahit);
+  void  FindDevCut();
+  void  FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone);
+  int   AddPStoDiv(PS *aps, Hit *ahit);
+  void  RemoveMotherPSC();
+  void  RemoveSmallPSC(int minhits);
+  
   void RemovePSfromPSC(PS *aps, Hit *ahit); // remove ahit from all PSCs
   void RemovePSC(HitCollection *ahc);
-  void DividePSC(HitCollection *ahc, double factor);
-  void CheckPSCs(int minpaths, int maxpaths);
-  void ClearHitLevelMarker(int val);
 
-  void SetPSClimit(int detid, int val){ PSClimit[detid] = val;}
-  void SetMaxChi2(float value){ MaxChi2 = value;}
-  void SetMaxChi2s(float val0, float val1, float val2){ MaxChi2s[0] = val0; MaxChi2s[1] = val1; MaxChi2s[2] = val2;}
-  Float_t Dist(PS *aps, PSC *apsc); // calc distance of a pulse shape with a collection
-  Float_t Chi2Fast3D(PS *aps, PSC *apsc, float *Chi2Limits, float *chi2s, bool kFast); // compare a pulse shape with a collection
-  Float_t Chi2Fast(PS *aps, PSC *apsc, float Chi2Limit, bool kFast); // compare a pulse shape with a collection
+  void Devseg(const float *apulse, const float *bpulse, float *dev); // calc deviation of two segment pulse shape
   Float_t Chi2seg(const float *spulse, const float *PSCspulse); // compare two segment pulse shape
+
+  void CheckPSCstat(long long *PSCstat);
 
   // EventHits
   void SortEventHits(); // sort EventHits increasing iconfig, irun, ientry
-  int AddEventHits(EventHits* fHits);
-  int FindiEvtHit(int iconfig, int irun, int ientry, int &istart);
-  EventHits* FindEventHits(int i){ return fEventHits->at(i);}
-  int GetEventHitsSize(){ return fEventHits->size();}
+  long long AddEventHits(EventHits* fHits);
+  long long FindiEvtHit(int iconfig, int irun, int ientry, long long &istart);
+  EventHits* FindEventHits(long long i){ return fEventHits->at(i);}
+  long long GetEventHitsSize(){ return fEventHits->size();}
 
   // Tracking
   void TrackingLoop(); // tracking fHits
@@ -101,15 +111,6 @@ public:
   void ReadPSAbasis();
   TVector3 GetPSpos(int detid, int segid, PS *aps);
   
-  // Chi2sLimit Map
-  void LoadGridChi2sMap(string Mapfile, float scale){
-    cout<<"Use Chi2sLimit Map from "<<Mapfile<<" scale "<<scale<<endl;
-    agatageo->LoadGridChi2sMap(Mapfile, scale);
-    kMap = true;
-  }
-
-  void GetPSChi2sLimit(int detid, int segid, PS *aps, float chi2slimit[]);
-
 
   // Check Memory
   void SetMaxMemUsage(double value){ MaxMemUsage = value;}
@@ -118,38 +119,29 @@ public:
 
   // run option
   void SetPSA(bool val){ kPSA = val;}
-  void SetWithPS(bool val){ kWithPS = val;}
-  void SetGroupPos(bool val){ kGroupPos = val;}
 
+  void SetMaxNDiv(int val){ maxndiv = val;}
   
 private:
   int Detid = -1;
   AGATAgeo *agatageo;
 
   Double_t MaxMemUsage = 50; // max memory usage %
-  bool kMap = false;
   bool kPSA = false;
-  bool kWithPS = true;
-  bool kGroupPos = false;
   
-  float MaxChi2;
-  float MaxChi2s[3];
-
   // Pulse Shape Collection and Hit Collection
   TFile *pscfile[MaxNDets];
   TTree *psctree[MaxNDets][NSeg];
 
   int PSClimit[MaxNDets]; //PSC number limit
-  bool kAddNewPSC[MaxNDets][NSeg]; // flag if new PSC added
-  vector<PSC> fPSC[MaxNDets][NSeg]; // Pulse Shape Collection storage
+  vector<PSC*>* fPSC[MaxNDets][NSeg]; // Pulse Shape Collection storage
   vector<HitCollection*>* fHCs[MaxNDets][NSeg]; // Hit Collection storage
   vector<Int_t> freeHCs[MaxNDets][NSeg]; // idx of empty fHCs
-  vector<Int_t> divHCs[MaxNDets][NSeg]; // idx of divided fHCs
   vector<HitCollection*>* fAllHCs; // Hit Collection storage
   atomic_int ihc;
   mutex PSCmtx[MaxNDets][NSeg]; // fPSC lock for threads
   mutex AllHCmtx;
-
+  bool kAddNewPSC = true;
   
   // EventHits
   int nConfig = 0;
@@ -157,8 +149,8 @@ private:
   vector<int> MaxRun;
   vector<EventHits*>* fEventHits; //fHits in Events for tracking
   atomic_int atomrun;
-  atomic_int ievt;
-  atomic_int NevtsTotal;
+  atomic<long long> ievt;
+  atomic<long long> NevtsTotal;
   mutex EvtHitsmtx;
 
 #ifdef TRACKINGTREE
@@ -189,23 +181,16 @@ private:
   int   index;         // index for PSCid
   int   nhits;         // number of hits in group
 
-  int Marker;
-  float chi2limit[3];  // max chi2 for group PS
   float calpos[3];     // init selfcalib interaction position in labframe float(3)
   float cadpos[3];     // init selfcalib interaction position in detframe float(3)
   float calpos2[3];    // selfcalib interaction position in labframe float(3)
   float cadpos2[3];    // selfcalib interaction position in detframe float(3)
-#ifdef REALPOS
+
   float labpos[3];     // average interaction position in labframe float(3)
   float detpos[3];     // average interaction position in detframe float(3)  
   float dist;          // dist calpos - labpos
   float dist2;         // dist calpos2 - labpos
-  float cpos[3];                 // first pulse shape position in detframe float(3)
-#endif
 
-  int   cpulsehits;              // gamma hits number of first pulse
-  float cpulse[NSeg_comp][NSig]; // first pulse shape for comparison
-  float segwgt[NSeg_comp];       // first pulse segment weight for comparison
   float spulse[NSegCore][NSig];  // average pulse shape
 
   int npaths;
@@ -218,15 +203,16 @@ private:
   Int_t NDets; // number of detectors from LookUpTable
 
   // counter
-  atomic_int cPStotal;
-  atomic_int cPSCtotal;
-  atomic_int cPSCmem;
-  atomic_int cPSCfile;
-  atomic_int maxnhits;
-  atomic_int cPaths;
-  atomic_int cHits;
-  atomic_int cHCs;
-  atomic_int cPathsN[4];
+  atomic<long long> cPStotal;
+  atomic<long long> cPSCtotal;
+  atomic<long long> cPSCmem;
+  atomic<long long> cPSCfile;
+  atomic<long long> maxnhits;
+  atomic<long long> cPaths;
+  atomic<long long> cHits;
+  atomic<long long> cHCs;
+  atomic<long long> cPathsN[4];
+  atomic<long long> maxndiv;
 
   time_t start, stop;
 

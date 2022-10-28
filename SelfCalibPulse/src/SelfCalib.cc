@@ -24,7 +24,6 @@ void help(){
       <<setw(30)<<left<<" -init"<<" : initial folders for selfcalib"<<endl
       <<setw(30)<<left<<" -gp i"<<" : group pulse shape for det i.  i=-1 : all det"<<endl
       <<setw(30)<<left<<" -PSA"<<" : PSA to assign initial hit pos"<<endl
-      <<setw(30)<<left<<" -Map chi2mapfile scale"<<" : chi2s limit map for group pulse"<<endl
       <<setw(30)<<left<<" -comb"<<" : combine Hit files for every run"<<endl
       <<setw(30)<<left<<" -Fit"<<" : Fit HCs pos"<<endl
       <<setw(30)<<left<<" -loop Ntrack Nfit"<<" : set iterate Ntrack Nfit"<<endl
@@ -49,7 +48,6 @@ int main(int argc, char* argv[]){
   bool kMakeInit   = false;
   bool kGroupPulse = false;
   bool kPSA        = false;
-  bool kMAP        = false;
   bool kComb       = false;
   bool kFit        = false;
   bool kScanPS     = false;
@@ -61,9 +59,7 @@ int main(int argc, char* argv[]){
   string PSCPath = "PSCfiles";
   int MaxEvts = -1;
   double Diff = -1;
-  string chi2mapfile;
-  float chi2scale = 1;
-
+  
   if(argc==1){
     help();
     return 0;
@@ -83,10 +79,6 @@ int main(int argc, char* argv[]){
       Detid = atoi(argv[++i]);
     }else if(TString(argv[i]) == "-PSA"){
       kPSA = true;
-    }else if(TString(argv[i]) == "-Map"){
-      kMAP = true;
-      chi2mapfile = string(argv[++i]);
-      chi2scale = atof(argv[++i]);
     }else if(TString(argv[i]) == "-comb"){
       kComb = true;
     }else if(TString(argv[i]) == "-Fit"){
@@ -184,29 +176,12 @@ int main(int argc, char* argv[]){
   AGATA *agata = new AGATA(Detid);  
   agata->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
   agata->SetPSA(kPSA);
-  agata->SetWithPS(true);
-  agata->SetGroupPos(false);
 
 #ifdef NOISE
-  double chi2slimit[3] = {1,0.2,0.6}; // group pulse shape with chi2s[3] w/ noise test1
-  //double chi2slimit[3] = {1,0.5,0.6}; // group pulse shape with chi2s[3] w/ noise test2
-  //double chi2slimit[3] = {1,0.1,0.6}; // group pulse shape with chi2s[3] w/ noise test3
-  //if(Detid>-1 && Detid!=0) chi2slimit[1] = 0.5; // test4
-  //if(Detid>-1 && Detid==0) chi2slimit[1] = 0.5; // test5
-
-  agata->SetMaxChi2s(chi2slimit[0],chi2slimit[1],chi2slimit[2]);
-  cout<<Form("With noise Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
-  cout<<Form("PSCEmin = %.0f keV",PSCEMIN)<<endl;
-
+  cout<<Form("With noise")<<endl;
 #else
-  double chi2slimit[3] = {0.5,0.1,0.3}; // group pulse shape with chi2s[3] w/o noise
-  agata->SetMaxChi2s(chi2slimit[0],chi2slimit[1],chi2slimit[2]);
-  cout<<Form("Without noise, Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
-
+  cout<<Form("Without noise")<<endl;
 #endif
-
-  if(kMAP) agata->LoadGridChi2sMap(chi2mapfile.c_str(), chi2scale);
-
   
 
   //*****************************************//
@@ -228,55 +203,42 @@ int main(int argc, char* argv[]){
   if(kGroupPulse){
 
     time(&stepstart);
-    if(kConfig) treereader->GenerateHCs(agata);
+    if(kConfig) treereader->GenerateHCs(0,agata);
     time(&stepstop);
-    printf("=== GenerateHCs time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+    printf("=== InitialHCs time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
 
-    // loop till no new PSC added
-    treereader->SetUpdateHCs(1);
-    for(int iupdate=0; iupdate<3; iupdate++){
-      bool kNewPSC = agata->IsNewPSC(); // if new PSC added
-      if(!kNewPSC) break;
-      cout<<"\e[1;31m New PSC added from last step, UpdateHCs "<<iupdate<<" ... \e[0m"<<endl;
-      treereader->SetNewPSC(kNewPSC);
-      agata->SetAddNewPSC(false);
+    int ndiv = 0;
+    long long PSCstat[10];
+    agata->CheckPSCstat(PSCstat);
+    while(PSCstat[0]>MAXHITS){
+      cout<<"\033[1;31m"<<"Divide "<<ndiv<<": \033[0m"<<endl;
+      
+      time(&stepstart);
+      if(kConfig) treereader->GenerateHCs(1,agata);
+      if(kConfig) agata->FindDevCut();
+      time(&stepstop);
+      printf("=== FindMaxDeviation time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
 
       time(&stepstart);
-      if(kConfig) treereader->GenerateHCs(agata);
+      if(kConfig) treereader->GenerateHCs(2,agata);
       time(&stepstop);
-      printf("=== UpdateHCs %d time: %.1f seconds ===\n\n",iupdate,difftime(stepstop,stepstart));
+      printf("=== Divide PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+      time(&stepstart);
+      if(kConfig) agata->RemoveMotherPSC();
+      if(kConfig) agata->RemoveSmallPSC(MINHITS);
+      time(&stepstop);
+      printf("=== Remove PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+      
+      agata->CheckPSCstat(PSCstat);
+      cout<<"\033[1m"<<"PSC stats:"
+	  <<"  maxnhits = "<<PSCstat[0]
+	  <<" ; nPSC = "<<PSCstat[1]
+	  <<" ; nEmpty = "<<PSCstat[2]
+	  <<"\033[0m"<<endl<<endl;
+      ndiv++;
     }
-    treereader->SetNewPSC(false);
-    agata->SetAddNewPSC(false);
-
-
-
-    // remove PSCs with nhits<MINHITS, and divide PSCs with nhits>MAXHITS
-    time(&stepstart);
-    agata->CheckPSCs(MINHITS,MAXHITS);
-    time(&stepstop);
-    printf("=== CheckHCs time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
     
-    // loop till no new PSC added
-    treereader->SetUpdateHCs(2); //2: divide HCs
-    agata->SetAddNewPSC(true);
-    for(int iupdate=0; iupdate<3; iupdate++){
-      bool kNewPSC = agata->IsNewPSC(); // if new PSC added
-      if(!kNewPSC) break;
-      cout<<"\e[1;31m Update Divided HCs "<<iupdate<<" ... \e[0m"<<endl;
-      treereader->SetNewPSC(kNewPSC);
-      agata->SetAddNewPSC(false);
-
-      time(&stepstart);
-      if(kConfig) treereader->GenerateHCs(agata);
-      time(&stepstop);
-      printf("=== Update DivideHCs %d time: %.1f seconds ===\n\n",iupdate,difftime(stepstop,stepstart));
-    }
-    treereader->SetNewPSC(false);
-    agata->SetAddNewPSC(false);
-    agata->ClearHitLevelMarker(2);
-
-
     // save grouped HCs and Hits
     time(&stepstart);
     agata->WritePSCfiles(Detid);
@@ -338,11 +300,13 @@ int main(int argc, char* argv[]){
 
     }
 
+    /*
     // write to PSCfiles
     time(&stepstart);
     agata->WritePSCfiles();
     time(&stepstop);
     printf("=== WritePSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+    */
   }
   
   time(&stop);

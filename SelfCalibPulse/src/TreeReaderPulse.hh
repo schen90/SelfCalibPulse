@@ -41,24 +41,27 @@ public:
   virtual void MakeNoise();
   virtual void LoadNoise();
   
-  virtual void ScanPS(AGATA *agata, int nevts);
-  virtual void ScanPS(AGATA *agata, int nevts, double Diff);
-  virtual void ScanPSLoop1(int iChain, AGATA *agata, int nevts);
-  virtual void ScanPSLoop2(int itype, TTree *postree, TTree *anatree, AGATA *agata, int nevts, double Diff);
+  virtual void ScanPS(AGATA *agata, long long nevts);
+  virtual void ScanPS(AGATA *agata, long long nevts, double Diff);
+  virtual void ScanPSLoop1(int iChain, AGATA *agata, long long nevts);
+  virtual void ScanPSLoop2(int itype, TTree *postree, TTree *anatree, AGATA *agata, long long nevts, double Diff);
   
   virtual void Init(int iChain);
 
-  virtual void GenerateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
-				 int ientry, int nentries);
-  virtual void GenerateHCsLoop(int iconfig, int iChain, AGATA *agata, int nentries);
-  virtual void GenerateHCs(AGATA *agata);
-  virtual void GenerateHCs(AGATA *agata, int nevts);
-  virtual void GenerateHCs(AGATA *agata, int nevts, int iconfig);
+  virtual void GenerateHCs(int opt, AGATA *agata);
+  virtual void GenerateHCs(int opt, AGATA *agata, long long nevts);
+  virtual void GenerateHCs(int opt, AGATA *agata, long long nevts, int iconfig);
 
-  void SetNewPSC(bool val){ kNewPSC = val;}
-  void SetUpdateHCs(int val){ kUpdateHCs = val;}
+  virtual void GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *agata, long long nentries);
+
+  virtual void GenerateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
+				 int ientry, long long nentries);
+
+  virtual void FindMaxDevworker(int iconfig, int run, int iChain, AGATA *agata,
+				int ientry, long long nentries, long long &istart);
+
   virtual void UpdateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
-			       int ientry, int nentries, int &istart);
+			       int ientry, long long nentries, long long &istart);
 
   Double_t GetTotalSystemMemory();
   Double_t GetCurrentMemoryUsage();
@@ -70,15 +73,12 @@ private:
   TChain* fChain[NChain]; //!pointer to the analyzed tree
 
   int Detid = -1;
-  int NEventHits; // size of fEventHits in AGATA.hh
+  long long NEventHits; // size of fEventHits in AGATA.hh
 #ifdef NOISE
   float noise[NOISE]; // base for noise
 #endif
 
-  bool kNewPSC;
-  int kUpdateHCs = 0;
-  atomic_int cRemoveHit;
-  atomic_int cAddHit;
+  atomic_int cDivPS;
   atomic_int cNotMatch;
 
   int nConfig = 0;
@@ -87,7 +87,7 @@ private:
   vector<string> path;
   vector<int> MinRun;
   vector<int> MaxRun;
-  vector<int> Nevts;
+  vector<long long> Nevts;
 
   bool kWithPS = true;
   bool kGroupPos = false;
@@ -103,10 +103,10 @@ private:
     vector<int>             *ndet = 0;   // detector id
     vector<int>             *g4seg = 0;  // segment id
     vector<float>           *energy = 0; // deposit energy
-#ifdef REALPOS
+
     vector<vector<float>>   *posa = 0;   // absolute/global interaction position vector<float(3)>
     vector<vector<float>>   *posr = 0;   // relative/local interaction position vector<float(3)>
-#endif
+
     // pulse shape vector<>
     vector<int>             *pdet = 0;   // detector id for pulse shape
     vector<float>           *ecore = 0;  // core energy
@@ -131,9 +131,10 @@ private:
   PS GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift, bool skipPS);
   PS GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift, bool skipPS, int &segidx);
   atomic_int irun;
-  atomic_int ievt;
+  atomic<long long> ievt;
   atomic<bool> kcout;
-  double minchi2;
+  atomic<float> MaxDev;
+  atomic_int maxnhitsdiv;
   int kInterrupt;
   mutex treemtx; // tree lock for threads read
   time_t start, stop;

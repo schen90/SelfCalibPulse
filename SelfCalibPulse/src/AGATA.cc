@@ -1,6 +1,7 @@
 #ifndef AGATA_CC
 #define AGATA_CC
 
+#include <numeric>
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -35,10 +36,14 @@ AGATA::AGATA(int detid){
   cPaths    = 0;
   cHits     = 0;
   cHCs      = 0;
+  maxndiv   = 0;
 
-  for(int idet=0; idet<MaxNDets; idet++)
-    for(int iseg=0; iseg<NSeg; iseg++)
+  for(int idet=0; idet<MaxNDets; idet++){
+    for(int iseg=0; iseg<NSeg; iseg++){
+      fPSC[idet][iseg] = new vector<PSC*>();
       fHCs[idet][iseg] = new vector<HitCollection*>();
+    }
+  }
   fAllHCs = new vector<HitCollection*>();
   
   fEventHits = new vector<EventHits*>();
@@ -53,9 +58,6 @@ AGATA::AGATA(int detid){
     else        PSClimit[idet] = 5000;
     if(idet==0) PSClimit[idet] = 5000;
     
-    for(int iseg=0; iseg<NSeg; iseg++){
-      kAddNewPSC[idet][iseg] = false;
-    }
   }
 }
 
@@ -109,9 +111,14 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 	index = fHCs[idet][iseg]->at(ic)->GetPid();
 	nhits = fHCs[idet][iseg]->at(ic)->GetSize();
 
-	Marker = fHCs[idet][iseg]->at(ic)->Marker;
-	for(int ix=0; ix<3; ix++) chi2limit[ix] = fHCs[idet][iseg]->at(ic)->MaxChi2s[ix]*fHCs[idet][iseg]->at(ic)->chi2scales[ix];
+	if(nhits<1) continue;
 	
+	if( index != fPSC[idet][iseg]->at(ic)->index){
+	  cout<<endl<<"det "<<idet<<" seg "<<iseg<<" ["<<ic<<"] index not match :"
+	      <<index<<" != "<<fPSC[idet][iseg]->at(ic)->index<<endl;
+	  continue;
+	}
+
 	TVector3 vtmp;
 
 	vtmp = fHCs[idet][iseg]->at(ic)->GetInitPosition();
@@ -128,7 +135,6 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 	TMatrixD CadPos2 = agatageo->Lab2DetPos(det,CalPos2);
 	for(int ix=0; ix<3; ix++) cadpos2[ix] = CadPos2(ix,0);
 
-#ifdef REALPOS
 	vtmp = fHCs[idet][iseg]->at(ic)->GetRealPosition();
 	labpos[0] = vtmp.X();  labpos[1] = vtmp.Y();  labpos[2] = vtmp.Z();
 	TMatrixD LabPos(3,1);
@@ -144,21 +150,10 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 	for(int ix=0; ix<3; ix++) dist2 += SQ(calpos2[ix]-labpos[ix]);
 	dist2 = sqrt(dist2);
 
-	if(kWithPS) copy_n(fPSC[idet][iseg][ic].cpos, 3, cpos);
-#endif
-
-#ifdef WITHPS
-	if(kWithPS){
-	  cpulsehits = fPSC[idet][iseg][ic].cpulsehits;
-	  for(int iiseg=0; iiseg<NSegCore; iiseg++){
-	    copy_n(fPSC[idet][iseg][ic].spulse[iiseg], NSig, spulse[iiseg]);
-	  }
-	  for(int iiseg=0; iiseg<NSeg_comp; iiseg++){
-	    copy_n(fPSC[idet][iseg][ic].cpulse[iiseg], NSig, cpulse[iiseg]);
-	  }
-	  copy_n(fPSC[idet][iseg][ic].segwgt, NSeg_comp, segwgt);
+	for(int iiseg=0; iiseg<NSegCore; iiseg++){
+	  copy_n(fPSC[idet][iseg]->at(ic)->spulse[iiseg], NSig, spulse[iiseg]);
 	}
-#endif
+
 	npaths = fHCs[idet][iseg]->at(ic)->GetPaths()->size();
 	
 	psctree[idet][iseg]->Fill();
@@ -228,32 +223,18 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 	
 	psctree[idet][iseg]->GetEntry(i);
 
-	PSC apsc;
-	apsc.det = det;
-	apsc.seg = seg;
-	apsc.index = index;
-	apsc.nhits = nhits;
+	PSC* apsc = new PSC(det, seg);
+	apsc->index = index;
+	apsc->nhits = nhits;
 
-#ifdef REALPOS
-	copy_n(labpos, 3, apsc.labpos);
-	copy_n(detpos, 3, apsc.detpos);
-#endif
-	//copy_n(calpos, 3, apsc.calpos);
-	//copy_n(cadpos, 3, apsc.cadpos);
-#ifdef WITHPS
-	if(kWithPS){
-	  apsc.cpulsehits = cpulsehits;
-	  for(int iiseg=0; iiseg<NSegCore; iiseg++){
-	    copy_n(spulse[iiseg], NSig, apsc.spulse[iiseg]);
-	  }
-	  for(int iiseg=0; iiseg<NSeg_comp; iiseg++){
-	    copy_n(cpulse[iiseg], NSig, apsc.cpulse[iiseg]);
-	  }
-	  copy_n(segwgt, NSeg_comp, apsc.segwgt);
+	copy_n(labpos, 3, apsc->labpos);
+	copy_n(detpos, 3, apsc->detpos);
+
+	for(int iiseg=0; iiseg<NSegCore; iiseg++){
+	  copy_n(spulse[iiseg], NSig, apsc->spulse[iiseg]);
 	}
-#endif
 	
-	fPSC[idet][iseg].push_back(apsc);
+	fPSC[idet][iseg]->push_back(apsc);
 	cPSCtotal++;   cPSCmem++;
       }
     } //end of loop seg
@@ -276,9 +257,9 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 void AGATA::ClearPSCMem(){
   for(int idet = 0; idet<NDets; idet++)
     for(int iseg=0; iseg<NSeg; iseg++){
-      cPSCmem-=fPSC[idet][iseg].size();
-      fPSC[idet][iseg].clear();
-      fPSC[idet][iseg].shrink_to_fit();
+      cPSCmem-=fPSC[idet][iseg]->size();
+      fPSC[idet][iseg]->clear();
+      fPSC[idet][iseg]->shrink_to_fit();
     }
   cPSCtotal = 0;
   cPSCmem   = 0;
@@ -287,7 +268,7 @@ void AGATA::ClearPSCMem(){
   return;
 }
 
-void AGATA::GetPSCstat(int *PSCstat){
+void AGATA::GetPSCstat(long long *PSCstat){
   PSCstat[0] = cPStotal;
   PSCstat[1] = cPSCtotal;
   PSCstat[2] = cPSCmem;
@@ -296,6 +277,7 @@ void AGATA::GetPSCstat(int *PSCstat){
   PSCstat[5] = cPaths;
   PSCstat[6] = cHits;
   PSCstat[7] = cHCs;
+  PSCstat[8] = maxndiv;
   return;
 }
 
@@ -339,11 +321,12 @@ void AGATA::WriteHCfiles(int detid){
 
       hctree[iseg]->Branch("calpos",calpos,"calpos[3]/F"); // init position in lab frame
       hctree[iseg]->Branch("calpos2",calpos2,"calpos2[3]/F"); // calib position in lab frame
-#ifdef REALPOS
       hctree[iseg]->Branch("labpos",labpos,"labpos[3]/F"); // real position in lab frame
-#endif
 
       for(HitCollection* ahc : *fHCs[idet][iseg]){
+
+	if(ahc->GetSize()<1) continue;
+
 	det = ahc->GetDet();
 	seg = ahc->GetSeg();
 	index = ahc->GetPid();
@@ -354,10 +337,9 @@ void AGATA::WriteHCfiles(int detid){
 	tmp = ahc->GetPosition();
 	calpos2[0] = tmp.X(); calpos2[1] = tmp.Y(); calpos2[2] = tmp.Z();
 
-#ifdef REALPOS
 	tmp = ahc->GetRealPosition();
 	labpos[0] = tmp.X(); labpos[1] = tmp.Y(); labpos[2] = tmp.Z();
-#endif
+
 	hctree[iseg]->Fill();
       }
       hctree[iseg]->Write();
@@ -399,9 +381,7 @@ void AGATA::LoadHCfiles(int detid){
   hctree->SetBranchAddress("index",&index); // PSCid
 
   hctree->SetBranchAddress("calpos",calpos); // init position in lab frame
-#ifdef REALPOS
   hctree->SetBranchAddress("labpos",labpos); // real position in lab frame
-#endif
   
   int Nhcs = hctree->GetEntriesFast();
 
@@ -409,14 +389,10 @@ void AGATA::LoadHCfiles(int detid){
     if(ihc%10000==0) cout<<"\r load "<<ihc<<" / "<<Nhcs<<" HitCollections..."<<flush;
     hctree->GetEntry(ihc);
 
-    if(fHCs[det][seg]->size()!=index){ cerr<<"HC index not match!!!"<<endl;}
+    //if(fHCs[det][seg]->size()!=index){ cerr<<"HC index not match!!!"<<endl;}
 
-#ifdef REALPOS
     HitCollection* ahc = new HitCollection(det, seg, index, labpos, calpos);
-#else
-    float dummy[3] = {0,0,0};
-    HitCollection* ahc = new HitCollection(det, seg, index, dummy, calpos);    
-#endif
+
     fHCs[det][seg]->push_back(ahc);
     ahc->SetGid(ihc);
     fAllHCs->push_back(ahc);
@@ -517,9 +493,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("hcid",&vhcid);
 	htree[idet]->Branch("depE",&depE);
 	htree[idet]->Branch("calpos",calpos,"calpos[3]/F");
-#ifdef REALPOS
 	htree[idet]->Branch("labpos",labpos,"labpos[3]/F");
-#endif
 #ifdef NOISE
 	htree[idet]->Branch("noiseidx",&noiseidx);
 	htree[idet]->Branch("noiseidxshift",&noiseidxshift);
@@ -555,10 +529,10 @@ void AGATA::WriteEvtHitsfiles(int detid){
       TVector3 tmp;
       tmp = ah->GetPosition();
       calpos[0] = tmp.X(); calpos[1] = tmp.Y(); calpos[2] = tmp.Z();
-#ifdef REALPOS
+
       tmp = ah->GetRealPosition();
       labpos[0] = tmp.X(); labpos[1] = tmp.Y(); labpos[2] = tmp.Z();
-#endif
+
 #ifdef NOISE
       noiseidx = ah->GetNoiseIdx();
       noiseidxshift = ah->GetNoiseIdxShift();
@@ -592,7 +566,7 @@ void AGATA::Load(string configfile){
   float spos[3]; // source position mm
   string pathtmp;
   int run[2];
-  int nevt;
+  long long nevt;
   while(!fin.eof()){
     fin.getline(buffer,500);
     if(strncmp(buffer,"#input",6)==0){
@@ -642,9 +616,8 @@ void AGATA::CombEvtHitsfiles(){
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
-#ifdef REALPOS
     float        ilabpos[3];
-#endif
+
 #ifdef NOISE
     int          inoiseidx;
     int          inoiseidxshift;
@@ -714,9 +687,7 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("hcid",          &obj[detid].ihcid);
 	htree[detid]->SetBranchAddress("depE",          &obj[detid].idepE);
 	htree[detid]->SetBranchAddress("calpos",         obj[detid].icalpos);
-#ifdef REALPOS
 	htree[detid]->SetBranchAddress("labpos",         obj[detid].ilabpos);
-#endif
 #ifdef NOISE
 	htree[detid]->SetBranchAddress("noiseidx",      &obj[detid].inoiseidx);
 	htree[detid]->SetBranchAddress("noiseidxshift", &obj[detid].inoiseidxshift);
@@ -754,9 +725,7 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("hcid",&ovhcid);
       htreeall->Branch("depE",&odepE);
       htreeall->Branch("calpos",ocalpos,"calpos[3]/F");
-#ifdef REALPOS
       htreeall->Branch("labpos",olabpos,"labpos[3]/F");
-#endif
 #ifdef NOISE
       htreeall->Branch("noiseidx",&onoiseidx);
       htreeall->Branch("noiseidxshift",&onoiseidxshift);
@@ -783,9 +752,7 @@ void AGATA::CombEvtHitsfiles(){
 	      for(int id : *obj[detid].ihcid) ovhcid.push_back(id);
 	      odepE = obj[detid].idepE;
 	      for(int ix=0; ix<3; ix++) ocalpos[ix] = obj[detid].icalpos[ix];
-#ifdef REALPOS
 	      for(int ix=0; ix<3; ix++) olabpos[ix] = obj[detid].ilabpos[ix];
-#endif
 #ifdef NOISE
 	      onoiseidx = obj[detid].inoiseidx;
 	      onoiseidxshift = obj[detid].inoiseidxshift;
@@ -842,9 +809,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
-#ifdef REALPOS
     float        ilabpos[3];
-#endif
 #ifdef NOISE
     int          inoiseidx;
     int          inoiseidxshift;
@@ -917,9 +882,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
       htree[detid]->SetBranchAddress("hcid",          &obj[detid].ihcid);
       htree[detid]->SetBranchAddress("depE",          &obj[detid].idepE);
       htree[detid]->SetBranchAddress("calpos",         obj[detid].icalpos);
-#ifdef REALPOS
       htree[detid]->SetBranchAddress("labpos",         obj[detid].ilabpos);
-#endif
 #ifdef NOISE
       htree[detid]->SetBranchAddress("noiseidx",      &obj[detid].inoiseidx);
       htree[detid]->SetBranchAddress("noiseidxshift", &obj[detid].inoiseidxshift);
@@ -942,9 +905,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
     vector<vector<int>>    vhcid;
     vector<float>          vdepE;
     vector<vector<double>> vcalpos;
-#ifdef REALPOS
     vector<vector<double>> vlabpos;
-#endif
 #ifdef NOISE
     vector<int>            vnoiseidx;
     vector<int>            vnoiseidxshift;
@@ -960,9 +921,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
       vhcid.clear();
       vdepE.clear();
       vcalpos.clear();
-#ifdef REALPOS
       vlabpos.clear();
-#endif
 #ifdef NOISE
       vnoiseidx.clear();
       vnoiseidxshift.clear();
@@ -995,11 +954,11 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 	  vector<double> tmppos1(3);
 	  for(int ix=0; ix<3; ix++) tmppos1[ix]=obj[detid].icalpos[ix];
 	  vcalpos.push_back(tmppos1);
-#ifdef REALPOS
+
 	  vector<double> tmppos2(3);
 	  for(int ix=0; ix<3; ix++) tmppos2[ix]=obj[detid].ilabpos[ix];
 	  vlabpos.push_back(tmppos2);
-#endif
+
 #ifdef NOISE
 	  vnoiseidx.push_back(obj[detid].inoiseidx);
 	  vnoiseidxshift.push_back(obj[detid].inoiseidxshift);
@@ -1026,11 +985,8 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 	
 	float depE = vdepE[i]; // keV
 	TVector3 initpos(vcalpos[i][0],vcalpos[i][1],vcalpos[i][2]); // mm
-#ifdef REALPOS
 	TVector3 hitpos(vlabpos[i][0],vlabpos[i][1],vlabpos[i][2]); // mm
-#else
-	TVector3 hitpos(0,0,0);
-#endif
+
 	Hit *ahit = new Hit(detid, segid, depE, hitpos, initpos);
 	ahit->SetInterid(interid);
 	
@@ -1047,12 +1003,13 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 #endif
 	// connect with HCs
 	for(int ii=0; ii<vhcid[i].size(); ii++){
-	  int ipsc = vhcid[i][ii];
-	  if(ipsc>fHCs[detid][segid]->size()-1){
-	    cerr<<"ipsc = "<<ipsc<<" outside fHCs["<<detid<<"]["<<segid<<"] range!!!!"<<endl;
+	  int pscid = vhcid[i][ii];
+	  if(pscid>fHCs[detid][segid]->back()->GetPid()){
+	    cerr<<"pscid = "<<pscid<<" outside fHCs["<<detid<<"]["<<segid<<"] range!!!!"<<endl;
 	    continue;
 	  }
-	    
+
+	  int ipsc = FindHC(detid, segid, pscid);
 	  HitCollection *ahc = fHCs[detid][segid]->at(ipsc);
 	  ahc->AddHit(ahit);
 	  ahit->AddHitCollection(ahc);
@@ -1097,9 +1054,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
-#ifdef REALPOS
     float        ilabpos[3];
-#endif
 #ifdef NOISE
     int          inoiseidx;
     int          inoiseidxshift;
@@ -1162,9 +1117,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     htree->SetBranchAddress("hcid",          &obj.ihcid);
     htree->SetBranchAddress("depE",          &obj.idepE);
     htree->SetBranchAddress("calpos",         obj.icalpos);
-#ifdef REALPOS
     htree->SetBranchAddress("labpos",         obj.ilabpos);
-#endif
 #ifdef NOISE
     htree->SetBranchAddress("noiseidx",      &obj.inoiseidx);
     htree->SetBranchAddress("noiseidxshift", &obj.inoiseidxshift);
@@ -1184,9 +1137,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<vector<int>>    vhcid;
     vector<float>          vdepE;
     vector<vector<double>> vcalpos;
-#ifdef REALPOS
     vector<vector<double>> vlabpos;
-#endif
 #ifdef NOISE
     vector<int>            vnoiseidx;
     vector<int>            vnoiseidxshift;
@@ -1203,9 +1154,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       vhcid.clear();
       vdepE.clear();
       vcalpos.clear();
-#ifdef REALPOS
       vlabpos.clear();
-#endif
 #ifdef NOISE
       vnoiseidx.clear();
       vnoiseidxshift.clear();
@@ -1228,11 +1177,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	  vector<double> tmppos1(3);
 	  for(int ix=0; ix<3; ix++) tmppos1[ix]=obj.icalpos[ix];
 	  vcalpos.push_back(tmppos1);
-#ifdef REALPOS
+
 	  vector<double> tmppos2(3);
 	  for(int ix=0; ix<3; ix++) tmppos2[ix]=obj.ilabpos[ix];
 	  vlabpos.push_back(tmppos2);
-#endif
+
 #ifdef NOISE
 	  vnoiseidx.push_back(obj.inoiseidx);
 	  vnoiseidxshift.push_back(obj.inoiseidxshift);
@@ -1259,11 +1208,8 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 
 	float depE = vdepE[i]; // keV
 	TVector3 initpos(vcalpos[i][0],vcalpos[i][1],vcalpos[i][2]); // mm
-#ifdef REALPOS
 	TVector3 hitpos(vlabpos[i][0],vlabpos[i][1],vlabpos[i][2]); // mm
-#else
-	TVector3 hitpos(0,0,0);
-#endif
+
 	Hit *ahit = new Hit(detid, segid, depE, hitpos, initpos);
 	ahit->SetInterid(interid);
 	
@@ -1280,12 +1226,13 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 #endif
 	// connect with HCs
 	for(int ii=0; ii<vhcid[i].size(); ii++){
-	  int ipsc = vhcid[i][ii];
-	  if(ipsc>fHCs[detid][segid]->size()-1){
-	    cerr<<"ipsc = "<<ipsc<<" outside fHCs["<<detid<<"]["<<segid<<"] range!!!!"<<endl;
+	  int pscid = vhcid[i][ii];
+	  if(pscid>fHCs[detid][segid]->back()->GetPid()){
+	    cerr<<"pscid = "<<pscid<<" outside fHCs["<<detid<<"]["<<segid<<"] range!!!!"<<endl;
 	    continue;
 	  }
-	    
+
+	  int ipsc = FindHC(detid, segid, pscid);
 	  HitCollection *ahc = fHCs[detid][segid]->at(ipsc);
 	  ahc->AddHit(ahit);
 	  ahit->AddHitCollection(ahc);
@@ -1377,36 +1324,167 @@ void AGATA::ClearEvtHitsMem(){
 }
 
 
-
-void AGATA::SetAddNewPSC(bool val){
-  for(int detid=0; detid<MaxNDets; detid++)
-    for(int segid=0; segid<NSeg; segid++)
-      kAddNewPSC[detid][segid] = val;
-}
-
-bool AGATA::IsNewPSC(){ // if new PSC added
-  for(int detid=0; detid<MaxNDets; detid++)
-    for(int segid=0; segid<NSeg; segid++)
-      if(kAddNewPSC[detid][segid]) return true;
-  return false;
-}
-
 void AGATA::SortPSC(){
   for(int idet=0; idet<NDets; idet++){
     for(int iseg=0; iseg<NSeg; iseg++){
       // increasing ientry
-      sort(fPSC[idet][iseg].begin(),fPSC[idet][iseg].end(),
-	   [](const PSC& lhs, const PSC& rhs){
-	     return lhs.index<rhs.index;});
+      sort(fPSC[idet][iseg]->begin(),fPSC[idet][iseg]->end(),
+	   [](const PSC* lhs, const PSC* rhs){
+	     return lhs->index<rhs->index;});
     }
   }  
   return;
 }
 
+
+int AGATA::FindHC(int detid, int segid, int pscid){
+  int ipsc = -1;
+  int npsc = fHCs[detid][segid]->size();
+  for(int i=0; i<npsc; i++){
+    int tmpid = fHCs[detid][segid]->at(i)->GetPid();
+    if     ( tmpid <  pscid ) continue;
+    else if( tmpid == pscid){ ipsc=i; break;}
+    else if( tmpid >  pscid) break;
+  }
+  
+  return ipsc;
+}
+
 //oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo
 // group pulse shape
 //oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo
-Double_t AGATA::AddPStoPSC(PS *aps, Hit *ahit, vector<int> &entrylist){
+int AGATA::InitPSCandHC(int detid, int segid){
+
+  int ipsc = -1;
+  if(freeHCs[detid][segid].size()>0){ // use old HCs
+    ipsc = freeHCs[detid][segid][0];
+    freeHCs[detid][segid].erase(freeHCs[detid][segid].begin());
+
+  }else if(kAddNewPSC){ // create new HCs
+
+    ipsc = fPSC[detid][segid]->size();
+
+    // initial PSC for detid,segid
+    PSC *newpsc = new PSC(detid, segid);
+    newpsc->index = ipsc;
+    newpsc->nhits = 0;
+    newpsc->dividx = vector<int>(0);
+    for(int ix=0; ix<3; ix++){
+      newpsc->labpos[ix] = 0;
+      newpsc->detpos[ix] = 0;
+    }
+    int fseg[NSeg_comp];
+    agatageo->GetNextSegs(segid, fseg);
+    for(int iseg=0; iseg<NSeg_comp; iseg++){
+      newpsc->divzone[iseg] = -1;
+      newpsc->segcmp[iseg] = fseg[iseg];
+      newpsc->devabscut[iseg] = -1;
+      newpsc->devabs[iseg] = vector<float>(0);
+    }
+    for(int iseg=0; iseg<NSegCore; iseg++){
+      for(int isig=0; isig<NSig; isig++){
+	newpsc->spulse[iseg][isig] = 0;
+      }
+    }
+
+    fPSC[detid][segid]->push_back(newpsc);
+
+    // new HitCollection
+    TMatrixD SegPos = agatageo->GetSegPos(detid,segid);
+    float dummycalpos[3];
+    float dummylabpos[3];
+    for(int ix=0; ix<3; ix++){
+      dummycalpos[ix] = SegPos(ix,0);
+      dummylabpos[ix] = 0;
+    }
+    HitCollection* newhc = new HitCollection(detid, segid, ipsc, dummylabpos, dummycalpos);
+    fHCs[detid][segid]->push_back(newhc);
+
+#ifdef NTHREADS
+    lock_guard<mutex> lock2(AllHCmtx); // lock fAllHCs
+#endif
+    newhc->SetGid(fAllHCs->size());
+    fAllHCs->push_back(newhc);
+  }
+  
+  if(ipsc>-1){
+    cPSCtotal++;   cPSCmem++;    cHCs++;
+  }
+  
+  return ipsc;
+}
+
+
+void AGATA::FindInitZone(PS *aps, vector<int> *initzone){
+  int segid = aps->seg;
+  int fseg[NSeg_comp];
+  agatageo->GetNextSegs(segid, fseg);
+
+  float apulse[NSig_comp], bpulse[NSig_comp];
+  float asum, bsum;
+  float apulseabs[NSig_comp], bpulseabs[NSig_comp];
+  float asumabs, bsumabs;
+  float ratio;
+
+  vector<int> zone[3];
+
+  // 0:iseg and 1:core
+  copy_n( aps->opulse[fseg[0]], NSig_comp, apulse);
+  copy_n( aps->opulse[fseg[1]], NSig_comp, bpulse);
+
+  asum = std::accumulate( apulse, apulse+NSig_comp, 0.);
+  bsum = std::accumulate( bpulse, bpulse+NSig_comp, 0.);
+
+  ratio = asum/bsum;
+  if( ratio<0.8 ) zone[0].push_back(0); // inner
+  if( ratio>1.2 ) zone[0].push_back(1); // outer
+  if( fabs(ratio-1)<=0.2 ) zone[0].push_back(2); // center
+
+  // neighbor sector 2 & 3
+  copy_n( aps->opulse[fseg[2]], NSig_comp, apulse);
+  copy_n( aps->opulse[fseg[3]], NSig_comp, bpulse);
+
+  for(int i=0; i<NSig_comp; i++){
+    apulseabs[i] = fabs(apulse[i]);
+    bpulseabs[i] = fabs(bpulse[i]);
+  }
+
+  asum = std::accumulate( apulse, apulse+NSig_comp, 0.);
+  bsum = std::accumulate( bpulse, bpulse+NSig_comp, 0.);
+
+  asumabs = std::accumulate( apulseabs, apulseabs+NSig_comp, 0.);
+  bsumabs = std::accumulate( bpulseabs, bpulseabs+NSig_comp, 0.);
+
+  ratio = asumabs/bsumabs;
+  if( ratio<0.8 ) zone[1].push_back(0); // left
+  if( ratio>1.2 ) zone[1].push_back(1); // right
+  if( fabs(ratio-1)<=0.2) zone[1].push_back(2); // center
+
+  if( asum<-0.5*asumabs ) zone[2].push_back(0); // negative
+  if( asum> 0.5*asumabs ) zone[2].push_back(1); // positive
+  if( fabs(asum)<=0.5*asumabs) zone[2].push_back(2); // bipolar
+
+  // neighbor slice 4 & 5 <--- not used
+
+
+  // init zone
+  for(int i0=0; i0<zone[0].size(); i0++){
+    for(int i1=0; i1<zone[1].size(); i1++){
+      for(int i2=0; i2<zone[2].size(); i2++){
+	int tmpzone = zone[0][i0] + zone[1][i1]*3 + zone[2][i2]*3*3;
+	initzone->push_back(tmpzone);
+      }
+    }
+  } 
+
+
+  return;
+}
+
+int AGATA::AddPS(PS *aps, Hit *ahit){
+  vector<int> *initzone = new vector<int>();
+  FindInitZone(aps, initzone); // find all init zone the PS belong to
+
   int detid = aps->det;
   int segid = aps->seg;
 
@@ -1414,247 +1492,314 @@ Double_t AGATA::AddPStoPSC(PS *aps, Hit *ahit, vector<int> &entrylist){
   lock_guard<mutex> lock(PSCmtx[detid][segid]); // lock PSC for one segment
 #endif
 
-#ifdef REALPOS
-  TMatrixD pos(3,1); for(int ix=0; ix<3; ix++) pos(ix,0) = aps->labpos[ix];
-#endif
+  while(fPSC[detid][segid]->size()<27){
+    int tmp = InitPSCandHC(detid, segid);
+  }
 
-  float maxchi2;
-  float maxchi2s[3];
-  float dymaxchi2 = MaxChi2;
-  float dymaxchi2s[3] = {MaxChi2s[0], MaxChi2s[1], MaxChi2s[2]};
-  float minscale = 1.;
-  Double_t minchi2 = 1e9;
+  cPStotal++;
+  int tmp;
+  for(int i=0; i<initzone->size(); i++){
+    tmp = AddPStoPSC(aps, ahit, initzone->at(i));
+  }
+  return tmp;
+}
 
-  int level = ahit->GetLevel();
-  int npsc;
-  if(level==1) npsc = fPSC[detid][segid].size(); // initial group fHCs
-  else if(level==2) npsc = divHCs[detid][segid].size(); // divide fHCs
-  else return minchi2; // skip hit
-
-  int ipsc;
-  for(int i=0; i<npsc; i++){
-    if(level==1) ipsc=i;
-    else if(level==2) ipsc=divHCs[detid][segid][i];
-    else continue;
-
-    if(ipsc<0 || ipsc>fHCs[detid][segid]->size()-1) continue;
-
-    if(ahit->InHitCollection(fHCs[detid][segid]->at(ipsc))) continue; // skip if already in HC
-    
-    // dynamic chi2 range from HC
-    float chi2scale;
-    float chi2scales[3];
-    if(kGroupPos){
-      maxchi2 = fHCs[detid][segid]->at(ipsc)->MaxChi2s[0];
-      chi2scale = fHCs[detid][segid]->at(ipsc)->chi2scales[0];
-    }else{
-      for(int ix=0; ix<3; ix++){
-	maxchi2s[ix] = fHCs[detid][segid]->at(ipsc)->MaxChi2s[ix];
-	chi2scales[ix] = fHCs[detid][segid]->at(ipsc)->chi2scales[ix];
-      }
-    }
-    
-    float chi2;
-    float chi2s[3];
-    if(kGroupPos) chi2 = Dist(aps,&fPSC[detid][segid][ipsc]); // group according to real position
-    else          chi2 = Chi2Fast3D(aps,&fPSC[detid][segid][ipsc],maxchi2s,chi2s,true);
-    //else          chi2 = Chi2Fast(aps,&fPSC[detid][segid][ipsc],maxchi2,true);
-
-    if(chi2<minchi2) minchi2 = chi2;
-
-    if((kGroupPos && chi2<maxchi2) ||
-       (!kGroupPos &&
-	chi2s[0]<maxchi2s[0] &&
-	chi2s[1]<maxchi2s[1] &&
-	chi2s[2]<maxchi2s[2])){ // within initial chi2 range
-
-      // get min dynamic chi2 range for new PSC
-      if(kGroupPos){
-	if((maxchi2*chi2scale)<dymaxchi2) dymaxchi2 = maxchi2*chi2scale;
-	minscale = min(minscale,chi2scale);
-      }else{
-	for(int ix=0; ix<3; ix++){
-	  if((maxchi2s[ix]*chi2scales[ix])<dymaxchi2s[ix] || dymaxchi2s[ix]==MaxChi2s[ix]){
-	    dymaxchi2s[ix] = maxchi2s[ix]*chi2scales[ix];
-	    minscale = min(minscale,chi2scales[ix]);
-	  }
-	}
-      }
-      
-      // add to PSC
-      if((kGroupPos && chi2<(maxchi2*chi2scale)) ||
-	 (!kGroupPos &&
-	  chi2s[0]<(maxchi2s[0]*chi2scales[0]) &&
-	  chi2s[1]<(maxchi2s[1]*chi2scales[1]) &&
-	  chi2s[2]<(maxchi2s[2]*chi2scales[2]))){ // within dynamic chi2 range
-
-	entrylist.push_back(fPSC[detid][segid][ipsc].index);
-
-	double nhitstmp = (double)fPSC[detid][segid][ipsc].nhits;
-#ifdef REALPOS
-	// calc average position
-	TMatrixD LabPos(3,1);
-	for(int it=0; it<3; it++) LabPos(it,0) = fPSC[detid][segid][ipsc].labpos[it];
-	LabPos = 1./(nhitstmp+1)*(nhitstmp*LabPos + pos);
-	TMatrixD DetPos = agatageo->Lab2DetPos(detid,LabPos);
-      
-	for(int it=0; it<3; it++){
-	  fPSC[detid][segid][ipsc].labpos[it] = LabPos(it,0);
-	  fPSC[detid][segid][ipsc].detpos[it] = DetPos(it,0);
-	}
-#endif
-      
-#ifdef WITHPS
-	if(kWithPS){
-	  // calc average pulse
-	  for(int iseg=0; iseg<NSegCore; iseg++)
-	    for(int isig=0; isig<NSig; isig++)
-	      fPSC[detid][segid][ipsc].spulse[iseg][isig] =
-		1./(nhitstmp+1)*(fPSC[detid][segid][ipsc].spulse[iseg][isig]*nhitstmp +
-				 aps->opulse[iseg][isig]);
-	}
-#endif
-      
-	fPSC[detid][segid][ipsc].nhits++;
-	if(fPSC[detid][segid][ipsc].nhits>maxnhits) maxnhits = fPSC[detid][segid][ipsc].nhits;
-
-	// add to HitCollection
-	fHCs[detid][segid]->at(ipsc)->AddHit(ahit);
-#ifdef REALPOS
-	fHCs[detid][segid]->at(ipsc)->SetRealPosition(fPSC[detid][segid][ipsc].labpos);
-#endif
-	ahit->AddHitCollection(fHCs[detid][segid]->at(ipsc));
-
-      }
-    }
-  }//end of loop fPSC
-
+int AGATA::AddPStoPSC(PS *aps, Hit *ahit, int ipsc){
   
-  //***************************************************//
-  // new PSC
-  //***************************************************//
-  if(ahit->hasHitCollection()==0 &&
-     aps->energy>PSCEMIN &&
-     (fPSC[detid][segid].size()<PSClimit[detid]
-      || freeHCs[detid][segid].size()>0
-      || PSClimit[detid]<0)){
+  int detid = aps->det;
+  int segid = aps->seg;
 
-    float dummycalpos[3];
-    float dummylabpos[3];
+  int npsc = fPSC[detid][segid]->size();
+  if( ipsc > npsc-1 ){
+    if(ipsc==0){
+      int tmp = InitPSCandHC(detid, segid);
+      if(tmp<0) return tmp;
+    }else{
+      cout<<Form("cannot find ipsc = %d ; fPSC[%d][%d].size() = %d",ipsc,detid,segid,(int)fPSC[detid][segid]->size())<<endl;
+      return 0;
+    }
+  }
 
-    TVector3 tmppos = ahit->GetPosition(); // initial pos from ahit
-    TMatrixD CalPos(3,1);
-    CalPos(0,0)=tmppos.X();  CalPos(1,0)=tmppos.Y();  CalPos(2,0)=tmppos.Z();
-    //TMatrixD CadPos = agatageo->Lab2DetPos(detid,CalPos);   
-#ifdef REALPOS
-    TMatrixD DetPos = agatageo->Lab2DetPos(detid,pos);
+  double nhitstmp = (double)fPSC[detid][segid]->at(ipsc)->nhits;
+
+  // calc average position
+  TMatrixD pos(3,1); for(int ix=0; ix<3; ix++) pos(ix,0) = aps->labpos[ix];
+  TMatrixD LabPos(3,1);
+  for(int ix=0; ix<3; ix++) LabPos(ix,0) = fPSC[detid][segid]->at(ipsc)->labpos[ix];
+  LabPos = 1./(nhitstmp+1)*(nhitstmp*LabPos + pos);
+  TMatrixD DetPos = agatageo->Lab2DetPos(detid,LabPos);
+
+  for(int ix=0; ix<3; ix++){
+    fPSC[detid][segid]->at(ipsc)->labpos[ix] = LabPos(ix,0);
+    fPSC[detid][segid]->at(ipsc)->detpos[ix] = DetPos(ix,0);
+  }
+
+  // calc average pulse
+  for(int iseg=0; iseg<NSegCore; iseg++){
+    for(int isig=0; isig<NSig; isig++){
+      fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig] =
+	1./(nhitstmp+1)*(fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig]*nhitstmp +
+			 aps->opulse[iseg][isig]);
+    }
+  }
+
+  fPSC[detid][segid]->at(ipsc)->nhits++;
+
+  // add to HitCollection
+  fHCs[detid][segid]->at(ipsc)->AddHit(ahit);
+  fHCs[detid][segid]->at(ipsc)->SetRealPosition(fPSC[detid][segid]->at(ipsc)->labpos);
+  ahit->AddHitCollection(fHCs[detid][segid]->at(ipsc));
+
+  int tmpnhits = fPSC[detid][segid]->at(ipsc)->nhits;
+  if(tmpnhits>maxnhits) maxnhits=tmpnhits;
+  
+  return tmpnhits;
+}
+
+
+float AGATA::FindMaxDev(PS *aps, Hit *ahit){
+  int detid = aps->det;
+  int segid = aps->seg;
+  float MaxDev = 0;
+  
+#ifdef NTHREADS
+  lock_guard<mutex> lock(PSCmtx[detid][segid]); // lock PSC for one segment
 #endif
 
-    for(int ix=0; ix<3; ix++){
-      dummycalpos[ix] = CalPos(ix,0);
-#ifdef REALPOS
-      dummylabpos[ix] = pos(ix,0);
-#else
-      dummylabpos[ix] = 0;
-#endif
+  vector<HitCollection*>* hcs = ahit->GetHitCollections();
+  for(HitCollection* ahc : *hcs){
+    int ipsc = ahc->GetPid();
+    PSC *apsc = fPSC[detid][segid]->at(ipsc);
+
+    for(int is=0; is<NSeg_comp; is++){
+      int iseg = apsc->segcmp[is];
+
+      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
+      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
+      copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
+
+      float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
+      Devseg(asegpulse, bsegpulse, dev);
+      apsc->devabs[is].push_back(dev[0]);
+
+      if(dev[0]>MaxDev) MaxDev = dev[0];
+    }
+  }
+
+  return MaxDev;
+}
+
+
+void AGATA::FindDevCut(){
+  for(int idet=0; idet<MaxNDets; idet++){
+    for(int iseg=0; iseg<NSeg; iseg++){
+
+      for(PSC *apsc : *fPSC[idet][iseg]){
+
+	for(int is=0; is<NSeg_comp; is++){
+	  if(apsc->devabscut[is]<0){
+	    sort(apsc->devabs[is].begin(), apsc->devabs[is].end(), [](const float& l, const float& r){return l<r;});
+	    int nsize = apsc->devabs[is].size();
+	    if(nsize<1) continue;
+
+	    if(apsc->devabs[is][0] > (0.2*apsc->devabs[is][nsize-1])){
+	      // empty center zone
+	      apsc->devabscut[is] = 0.99*apsc->devabs[is][0];
+
+	    }else{
+	      int ncut = (int)(0.5*nsize);
+	      apsc->devabscut[is] = apsc->devabs[is][ncut];
+	    }
+	  }
+
+	  apsc->devabs[is].clear();
+	}
+      }
+
+    }
+  }
+
+  return;  
+}
+
+
+void AGATA::FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone){
+
+  for(int is=0; is<NSeg_comp; is++){
+    int iseg = apsc->segcmp[is];
+
+    float asegpulse[NSig_comp], bsegpulse[NSig_comp];
+    copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
+    copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
+
+    float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
+    Devseg(asegpulse, bsegpulse, dev);
+    vector<int> tmp;
+
+    if(apsc->devabscut[is]<0){
+      cout<<"devabscut<0 ; something wrong!!!"<<endl;
+      return;
     }
 
-    int idx;
-    if(freeHCs[detid][segid].size()>0){ // use old free PSC
-      idx = freeHCs[detid][segid][0];
-      freeHCs[detid][segid].erase(freeHCs[detid][segid].begin());
+    if(dev[0] <= apsc->devabscut[is]) tmp.push_back(0); // center zone
+    if(dev[0] >  apsc->devabscut[is]){
+      if(     dev[1] >  0.5 * dev[0]) tmp.push_back(1);      // above zone
+      else if(dev[1] < -0.5 * dev[0]) tmp.push_back(2);      // below zone
+      // bipolar zone
+      else                            tmp.push_back(3);      // bipolar zone
+      //else if(dev[2] >  0)            tmp.push_back(3);      // bipolar zone +-
+      //else                            tmp.push_back(4);      // bipolar zone -+
+    }
 
-      fHCs[detid][segid]->at(idx)->SetRealPosition(dummylabpos);
-      fHCs[detid][segid]->at(idx)->SetPosition(dummycalpos);
-      fHCs[detid][segid]->at(idx)->SetInitPosition(dummycalpos);
+    divzone->push_back(tmp);
+  }
 
-    }else{ // add new PSC
-      PSC newpsc;
-      newpsc.det = detid;
-      newpsc.seg = segid;
-      newpsc.index = fPSC[detid][segid].size();
+  return;
+}
 
-      fPSC[detid][segid].push_back(newpsc);
-      idx = newpsc.index;
 
-      // new HitCollection
-      HitCollection* newhc = new HitCollection(detid, segid, idx, dummylabpos, dummycalpos);
-      fHCs[detid][segid]->push_back(newhc);
+int AGATA::AddPStoDiv(PS *aps, Hit *ahit){
+  int detid = aps->det;
+  int segid = aps->seg;
 
 #ifdef NTHREADS
-      lock_guard<mutex> lock2(AllHCmtx); // lock fAllHCs
-#endif
-      newhc->SetGid(fAllHCs->size());
-      fAllHCs->push_back(newhc);
-    }
-    cPSCtotal++;   cPSCmem++;    cHCs++;
-    
-    PSC *apsc = &fPSC[detid][segid][idx];
-    apsc->nhits = 1;
-    HitCollection* ahc = fHCs[detid][segid]->at(idx);
-    if(level==2){
-      ahc->Marker = 3;
-      divHCs[detid][segid].push_back(idx);
-    }
-    
-    for(int ix=0; ix<3; ix++){
-      //apsc->calpos[ix] = CalPos(ix,0);
-      //apsc->cadpos[ix] = CadPos(ix,0);
-#ifdef REALPOS
-      apsc->labpos[ix] = pos(ix,0);
-      apsc->detpos[ix] = DetPos(ix,0);
-      apsc->cpos[ix] = apsc->detpos[ix];
-#endif
-    }
-
-#ifdef WITHPS
-    if(kWithPS){
-      apsc->cpulsehits = aps->nhits;
-      for(int iseg=0; iseg<NSeg_comp; iseg++){
-	copy_n(aps->apulse[iseg], NSig, apsc->cpulse[iseg]);
-      }
-      copy_n(aps->segwgt, NSeg_comp, apsc->segwgt);
-      
-      for(int iseg=0; iseg<NSegCore; iseg++){
-	copy_n(aps->opulse[iseg], NSig, apsc->spulse[iseg]);
-      }
-    }
+  lock_guard<mutex> lock(PSCmtx[detid][segid]); // lock PSC for one segment
 #endif
 
-    // chi2slimit map
-    if(kMap && minscale==1.){
-      float tmpmaxchi2s[3];
-      GetPSChi2sLimit(detid, segid, aps, tmpmaxchi2s);
-      for(int ix=0; ix<3; ix++)
-	if(tmpmaxchi2s[ix]>0)
-	  dymaxchi2s[ix] = tmpmaxchi2s[ix];
-    }
-    
-    if(kGroupPos){
-      ahc->MaxChi2s[0] = dymaxchi2;
-      ahc->chi2scales[0] = 1.;
-    }else{
-      for(int ix=0; ix<3; ix++){
-	ahc->MaxChi2s[ix] = dymaxchi2s[ix];
-	ahc->chi2scales[ix] = 1.;
+  int tmpnhits = 0;
+  vector<HitCollection*>* hcs = ahit->GetHitCollections();
+  int nhcs = hcs->size();
+  for(int iHC=0; iHC<nhcs; iHC++){ // loop HitCollections
+    HitCollection* ahc = hcs->at(iHC);
+    int ipsc = ahc->GetPid();
+    PSC *apsc = fPSC[detid][segid]->at(ipsc);
+
+    if(apsc->nhits > MAXHITS){ // if the PSC is large size, then divide it
+      vector<vector<int>> *divzone = new vector<vector<int>>();
+      FindDivZone(aps, apsc, divzone); // find all divided zone the PS belong to
+      int tmpidx[NSeg_comp];
+      int ndiv = 1;
+      for(int is=0; is<NSeg_comp; is++){
+	ndiv *= divzone->at(is).size();
+	tmpidx[is] = 0;
       }
-    }
-    ahc->AddHit(ahit);
-    ahit->AddHitCollection(ahc);
 
-    kAddNewPSC[detid][segid] = true;
-    
-    entrylist.push_back(idx);
-  }
+      int tmpzone[NSeg_comp];
+      for(int idiv=0; idiv<ndiv; idiv++){ // loop all divided zone the PS belong to
+	for(int is=0; is<NSeg_comp; is++) tmpzone[is] = divzone->at(is)[tmpidx[is]];
 
-  // count if previously has no HC and now has HCs
-  if(ahit->hasHitCollection()>0 && ahit->hasHitCollection()==entrylist.size()){
-    cPStotal++;
-    cHits++;
-  }
+	int ndaughter = apsc->dividx.size();
+	int idaughter;
+	int jpsc;
+	for(idaughter=0; idaughter<ndaughter; idaughter++){
+	  jpsc = apsc->dividx[idaughter];
+	  bool kfound = true;
+	  for(int is=0; is<NSeg_comp; is++){
+	    if(tmpzone[is] != fPSC[detid][segid]->at(jpsc)->divzone[is]){
+	      kfound = false;
+	      break;
+	    }
+	  }
+
+	  if(kfound) break;
+	}
+
+	if(idaughter==ndaughter){ // cannot find the daughter PSC
+	  jpsc = InitPSCandHC(detid, segid); // create new daughter PSC
+	  if(jpsc<0) continue;
+	  for(int is=0; is<NSeg_comp; is++) fPSC[detid][segid]->at(jpsc)->divzone[is] = tmpzone[is];
+	  apsc->dividx.push_back(jpsc);
+	  if(idaughter>maxndiv) maxndiv = idaughter;
+	}
+
+	// Add PS to PSC and HC
+	int tmp = AddPStoPSC(aps, ahit, jpsc);
+	if(tmp>tmpnhits) tmpnhits=tmp;
+
+	// next zone
+	tmpidx[0]++;
+	for(int is=0; is<NSeg_comp-1; is++){
+	  if(tmpidx[is]==divzone->at(is).size()){
+	    tmpidx[is] = 0;
+	    tmpidx[is+1]++;
+	  }
+	}
+	if(tmpidx[NSeg_comp-1]==divzone->at(NSeg_comp-1).size()){
+	  if(idiv!=ndiv-1) cout<<"something wrong!!!"<<endl;
+	  break;
+	}
+
+      } // end of loop divided zone
+    } // end of if the PSC is large size
+  } // end of loop HitCollections
   
-  return minchi2;
+  return tmpnhits;
 }
+
+
+void AGATA::RemoveMotherPSC(){
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++)
+    for(int segid=0; segid<NSeg; segid++)
+      PSCmtx[detid][segid].lock(); // lock PSC for one segment
+#endif
+
+  cout<<"\e[1;31m Remove Mother PSC ... \e[0m"<<endl;
+  int counter = 0;
+  for(HitCollection* ahc : *fAllHCs){
+    int detid = ahc->GetDet();
+    int segid = ahc->GetSeg();
+    int ipsc  = ahc->GetPid();
+    if(fPSC[detid][segid]->at(ipsc)->dividx.size()>0){
+      RemovePSC(ahc);
+      counter++;
+      if(counter%1000==0)
+	cout<<"\r Remove "<<counter<<" mother PSC"<<flush;
+    }
+  }
+  cout<<"\r Remove "<<counter<<" mother PSC"<<endl;
+
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++)
+    for(int segid=0; segid<NSeg; segid++)
+      PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
+#endif
+
+  return;
+}
+
+void AGATA::RemoveSmallPSC(int minhits){
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++)
+    for(int segid=0; segid<NSeg; segid++)
+      PSCmtx[detid][segid].lock(); // lock PSC for one segment
+#endif
+
+  cout<<"\e[1;31m Remove Small (<"<<minhits<<") PSC  ... \e[0m"<<endl;
+  int counter = 0;
+  for(HitCollection* ahc : *fAllHCs){
+    int detid = ahc->GetDet();
+    int segid = ahc->GetSeg();
+    int ipsc  = ahc->GetPid();
+    int tmpnhits = fPSC[detid][segid]->at(ipsc)->nhits;
+    if(tmpnhits>0 && tmpnhits<minhits){
+      RemovePSC(ahc);
+      counter++;
+      if(counter%1000==0)
+	cout<<"\r Remove "<<counter<<" small PSC"<<flush;
+    }
+  }
+  cout<<"\r Remove "<<counter<<" small PSC"<<endl;
+
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++)
+    for(int segid=0; segid<NSeg; segid++)
+      PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
+#endif
+
+  return;
+}
+
 
 
 void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit){ // remove ahit from all PSCs
@@ -1667,59 +1812,49 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit){ // remove ahit from all PSCs
 
   vector<HitCollection*>* hcs = ahit->GetHitCollections();
 
-#ifdef REALPOS
   TMatrixD pos(3,1); for(int ix=0; ix<3; ix++) pos(ix,0) = aps->labpos[ix];
-#endif
   
   for(HitCollection* ahc : *hcs){
 
     int ipsc = ahc->GetPid();
 
-    double nhitstmp = (double)fPSC[detid][segid][ipsc].nhits;
-#ifdef REALPOS
+    double nhitstmp = (double)fPSC[detid][segid]->at(ipsc)->nhits;
+
     // calc average position
     TMatrixD LabPos(3,1);
-    for(int it=0; it<3; it++) LabPos(it,0) = fPSC[detid][segid][ipsc].labpos[it];
-#endif
+    for(int it=0; it<3; it++) LabPos(it,0) = fPSC[detid][segid]->at(ipsc)->labpos[it];
 
     if(nhitstmp<1){
       cerr<<"something wrong, det = "<<detid<<" seg = "<<segid<<" ipsc = "<<ipsc
-	  <<" fPSC.nhits = "<<fPSC[detid][segid][ipsc].nhits
+	  <<" fPSC.nhits = "<<fPSC[detid][segid]->at(ipsc)->nhits
 	  <<" fHC.nhits = "<<fHCs[detid][segid]->at(ipsc)->GetSize()<<endl;
       continue;
     }
     double ftmp = 1;
     if(nhitstmp>1) ftmp = 1./(nhitstmp-1);
 
-#ifdef REALPOS
     LabPos = ftmp*(nhitstmp*LabPos - pos);
     TMatrixD DetPos = agatageo->Lab2DetPos(detid,LabPos);
       
     for(int it=0; it<3; it++){
-      fPSC[detid][segid][ipsc].labpos[it] = LabPos(it,0);
-      fPSC[detid][segid][ipsc].detpos[it] = DetPos(it,0);
+      fPSC[detid][segid]->at(ipsc)->labpos[it] = LabPos(it,0);
+      fPSC[detid][segid]->at(ipsc)->detpos[it] = DetPos(it,0);
     }
-#endif
     
-#ifdef WITHPS
-    if(kWithPS){
-      // calc average pulse
-      for(int iseg=0; iseg<NSegCore; iseg++)
-	for(int isig=0; isig<NSig; isig++)
-	  fPSC[detid][segid][ipsc].spulse[iseg][isig] =
-	    ftmp*(fPSC[detid][segid][ipsc].spulse[iseg][isig]*nhitstmp -
-		  aps->opulse[iseg][isig]);
-    }
-#endif
+    // calc average pulse
+    for(int iseg=0; iseg<NSegCore; iseg++)
+      for(int isig=0; isig<NSig; isig++)
+	fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig] =
+	  ftmp*(fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig]*nhitstmp -
+		aps->opulse[iseg][isig]);
       
-    fPSC[detid][segid][ipsc].nhits--;
-    if(fPSC[detid][segid][ipsc].nhits==0){ cPSCtotal--; cPSCmem--;}
+    fPSC[detid][segid]->at(ipsc)->nhits--;
+    if(fPSC[detid][segid]->at(ipsc)->nhits==0){ cPSCtotal--; cPSCmem--;}
 
     // remove from HitCollection
     fHCs[detid][segid]->at(ipsc)->RemoveHit(ahit);
-#ifdef REALPOS
-    fHCs[detid][segid]->at(ipsc)->SetRealPosition(fPSC[detid][segid][ipsc].labpos);
-#endif
+    fHCs[detid][segid]->at(ipsc)->SetRealPosition(fPSC[detid][segid]->at(ipsc)->labpos);
+
     if(fHCs[detid][segid]->at(ipsc)->GetSize()==0){
       freeHCs[detid][segid].push_back(ipsc);
       cHCs--;
@@ -1729,7 +1864,6 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit){ // remove ahit from all PSCs
 
   ahit->ClearHitCollection();
 
-  ahit->SetLevel(0);
   cPStotal--;
   cHits--;
 
@@ -1740,7 +1874,7 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit){ // remove ahit from all PSCs
 void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
   int detid = ahc->GetDet();
   int segid = ahc->GetSeg();
-  int idx = ahc->GetPid();
+  int ipsc  = ahc->GetPid();
 
   vector<Hit*>* fhits = ahc->GetHits();
   if(fhits->size()==0) return;
@@ -1748,200 +1882,158 @@ void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
   for(Hit* ah : *fhits){
     ah->RemoveHitCollection(ahc);
     if(ah->hasHitCollection()==0){
-      ah->SetLevel(0);
       cPStotal--;
       cHits--;
     }
   }
   ahc->Clear();
-  ahc->Marker = 0;
   cPSCtotal--; cPSCmem--;
    
-  fPSC[detid][segid][idx].nhits = 0;
-#ifdef REALPOS
+  fPSC[detid][segid]->at(ipsc)->nhits = 0;
+
   for(int ix=0; ix<3; ix++){
-    fPSC[detid][segid][idx].labpos[ix] = 0;
-    fPSC[detid][segid][idx].detpos[ix] = 0;
-    fPSC[detid][segid][idx].cpos[ix] = 0;
+    fPSC[detid][segid]->at(ipsc)->labpos[ix] = 0;
+    fPSC[detid][segid]->at(ipsc)->detpos[ix] = 0;
   }
-#endif
-#ifdef WITHPS
-  fPSC[detid][segid][idx].cpulsehits = 0;
-  for(int iseg=0; iseg<NSeg_comp; iseg++){
-    fPSC[detid][segid][idx].segwgt[iseg] = 0;
-    for(int isig=0; isig<NSig; isig++)
-      fPSC[detid][segid][idx].cpulse[iseg][isig] = 0;
+
+  for(int is=0; is<NSeg_comp; is++){
+    fPSC[detid][segid]->at(ipsc)->divzone[is] = -1;
+    fPSC[detid][segid]->at(ipsc)->devabscut[is] = -1;
+    fPSC[detid][segid]->at(ipsc)->devabs[is].clear();
   }
+  fPSC[detid][segid]->at(ipsc)->dividx.clear();
+  
   for(int iseg=0; iseg<NSegCore; iseg++){
     for(int isig=0; isig<NSig; isig++)
-      fPSC[detid][segid][idx].spulse[iseg][isig] = 0;
+      fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig] = 0;
   }
-#endif
 
-  freeHCs[detid][segid].push_back(idx);
+  freeHCs[detid][segid].push_back(ipsc);
   cHCs--;
   
   return;
 }
 
 
-void AGATA::DividePSC(HitCollection *ahc, double factor){ // divide ahc by reduced chi2s 
-  for(int ix=0; ix<3; ix++) ahc->chi2scales[ix] = ahc->chi2scales[ix]*factor;
-  ahc->chi2scales[1] = ahc->chi2scales[1]*factor;
-  
-  int detid = ahc->GetDet();
-  int segid = ahc->GetSeg();
-  int idx = ahc->GetPid();
+void AGATA::Devseg(const float *apulse, const float *bpulse, float *dev){
 
-  vector<Hit*>* fhits = ahc->GetHits();
-  if(fhits->size()==0) return;
+  //float apulsediff[NSig_comp], bpulsediff[NSig_comp];
+  //std::adjacent_difference( std::begin(apulse), std::end(apulse), std::begin(apulsediff));
+  //std::adjacent_difference( std::begin(bpulse), std::end(bpulse), std::begin(bpulsediff));
+
+  float apulsesum[NSig_comp], bpulsesum[NSig_comp];
+  std::partial_sum( apulse, apulse+NSig_comp, apulsesum);
+  std::partial_sum( bpulse, bpulse+NSig_comp, bpulsesum);
+
+  float asum, bsum;
+  asum = std::accumulate( apulsesum, apulsesum+NSig_comp, 0.);
+  bsum = std::accumulate( bpulsesum, bpulsesum+NSig_comp, 0.);
+
+  dev[2] = asum - bsum;
+
+#ifdef SSE_M256
+
+  const __m256 masks = _mm256_set1_ps(-0.0f);
   
-  for(Hit* ah : *fhits){
-    ah->SetLevel(2); // check for divide
-    ah->RemoveHitCollection(ahc);
-    if(ah->hasHitCollection()==0){
-      cPStotal--;
-      cHits--;
-    }
+  __m256* realtrace = (__m256*)apulse;
+  __m256* basetrace = (__m256*)bpulse;
+
+  __m256 diff = _mm256_setzero_ps();
+  __m256 devori = _mm256_setzero_ps();
+  __m256 devabs = _mm256_setzero_ps();
+  /*
+  __m256* realdiff = (__m256*)apulsediff;
+  __m256* basediff = (__m256*)bpulsediff;
+
+  __m256 diffdiff = _mm256_setzero_ps();
+  __m256 diffdevori = _mm256_setzero_ps();
+  __m256 diffdevabs = _mm256_setzero_ps();
+  */
+
+  for(int nn=0; nn<LOOP_SSE8_seg; nn++){
+    diff = _mm256_sub_ps(realtrace[nn], basetrace[nn]);
+    devori = _mm256_add_ps(devori, diff); // original value
+    devabs = _mm256_add_ps(devabs, _mm256_andnot_ps(masks, diff)); // ABS value
+    /*
+    diffdiff = _mm256_sub_ps(realdiff[nn], basediff[nn]);
+    diffdevori = _mm256_add_ps(diffdevori, diffdiff); // original value
+    diffdevabs = _mm256_add_ps(diffdevabs, _mm256_andnot_ps(masks, diffdiff)); // ABS value
+    */
   }
-  ahc->Clear();
-   
-  fPSC[detid][segid][idx].nhits = 0;
-#ifdef REALPOS
-  for(int ix=0; ix<3; ix++){
-    fPSC[detid][segid][idx].labpos[ix] = 0;
-    fPSC[detid][segid][idx].detpos[ix] = 0;
+
+  __m256 tmp0 = _mm256_permute2f128_ps(devabs, devabs, 1);
+  devabs = _mm256_add_ps(devabs, tmp0);
+  devabs = _mm256_hadd_ps(devabs, devabs);
+  devabs = _mm256_hadd_ps(devabs, devabs);
+
+  __m256 tmp1 = _mm256_permute2f128_ps(devori, devori, 1);
+  devori = _mm256_add_ps(devori, tmp1);
+  devori = _mm256_hadd_ps(devori, devori);
+  devori = _mm256_hadd_ps(devori, devori);
+
+  dev[0] = _mm256_cvtss_f32(devabs);
+  dev[1] = _mm256_cvtss_f32(devori);
+  /*
+  __m256 tmp2 = _mm256_permute2f128_ps(diffdevabs, diffdevabs, 1);
+  diffdevabs = _mm256_add_ps(diffdevabs, tmp2);
+  diffdevabs = _mm256_hadd_ps(diffdevabs, diffdevabs);
+  diffdevabs = _mm256_hadd_ps(diffdevabs, diffdevabs);
+
+  __m256 tmp3 = _mm256_permute2f128_ps(diffdevori, diffdevori, 1);
+  diffdevori = _mm256_add_ps(diffdevori, tmp3);
+  diffdevori = _mm256_hadd_ps(diffdevori, diffdevori);
+  diffdevori = _mm256_hadd_ps(diffdevori, diffdevori);
+
+  dev[2] = _mm256_cvtss_f32(devabs3);
+  dev[3] = _mm256_cvtss_f32(devori3);
+  */
+
+#else // use m128
+
+  const __m128 masks = _mm_set1_ps(-0.0f);
+  const __m128 zeros = _mm_setzero_ps();
+
+  __m128* realtrace = (__m128*)apulse;
+  __m128* basetrace = (__m128*)bpulse;
+
+  __m128 diff = _mm_setzero_ps();
+  __m128 devori = _mm_setzero_ps();
+  __m128 devabs = _mm_setzero_ps();
+  /*
+  __m128* realdiff = (__m128*)apulsediff;
+  __m128* basediff = (__m128*)bpulsediff;
+
+  __m128 diffdiff = _mm_setzero_ps();
+  __m128 diffdevori = _mm_setzero_ps();
+  __m128 diffdevabs = _mm_setzero_ps();
+  */
+
+  for(int nn=0; nn<LOOP_SSE4_seg; nn++){
+    diff = _mm_sub_ps(realtrace[nn], basetrace[nn]);
+    devori = _mm_add_ps(devori, diff); // original value
+    devabs = _mm_add_ps(devabs, _mm_andnot_ps(masks, diff)); // ABS value
+    /*
+    diffdiff = _mm_sub_ps(realdiff[nn], basediff[nn]);
+    diffdevori = _mm_add_ps(diffdevori, diffdiff); // original value
+    diffdevabs = _mm_add_ps(diffdevabs, _mm_andnot_ps(masks, diffdiff)); // ABS value
+    */
   }
-#endif
-#ifdef WITHPS
-  for(int iseg=0; iseg<NSegCore; iseg++){
-    for(int isig=0; isig<NSig; isig++)
-      fPSC[detid][segid][idx].spulse[iseg][isig] = 0;
-  }
+
+  devabs = _mm_hadd_ps(_mm_hadd_ps(devabs, zeros), zeros);
+  devori = _mm_hadd_ps(_mm_hadd_ps(devori, zeros), zeros);
+
+  dev[0] = _mm_cvtss_f32(devabs);
+  dev[1] = _mm_cvtss_f32(devori);
+  /*
+  diffdevabs = _mm_hadd_ps(_mm_hadd_ps(diffdevabs, zeros), zeros);
+  diffdevori = _mm_hadd_ps(_mm_hadd_ps(diffdevori, zeros), zeros);
+
+  dev[2] = _mm_cvtss_f32(diffdevabs);
+  dev[3] = _mm_cvtss_f32(diffdevori);
+  */
 #endif
 
-  ahc->Marker = 2;
-  divHCs[detid][segid].push_back(idx);
-  
   return;
-}
-
-
-void AGATA::CheckPSCs(int minhits, int maxhits){
-
-  // remove HCs with nhits<minhits
-  if(minhits>0){
-    int counter = 0;
-    for(HitCollection* ahc : *fAllHCs){
-      if(ahc->GetSize()<minhits){
-	RemovePSC(ahc);
-	counter++;
-	if(counter%10000==0)
-	  cout<<"\r Remove "<<counter<<" HCs with nhits<"<<minhits<<flush;
-      }
-    }
-    cout<<"\r Remove "<<counter<<" HCs with nhits<"<<minhits<<endl;
-  }
-
-  // divide HCs with nhits>2*maxhits
-  if(maxhits>0){
-    maxnhits=0;
-    for(int detid=0; detid<MaxNDets; detid++)
-      for(int segid=0; segid<NSeg; segid++)
-	divHCs[detid][segid].clear();
-    
-    int counter = 0;
-    for(HitCollection* ahc : *fAllHCs){
-      if(ahc->GetSize()>2*maxhits){
-	double factor = 1.*maxhits/ahc->GetSize();
-	factor = pow(factor, 1./4);
-	DividePSC(ahc, factor);
-	counter++;
-	if(counter%10000==0)
-	  cout<<"\r Divide "<<counter<<" HCs with nhits>"<<2*maxhits<<flush;
-      }else if(ahc->GetSize()>maxnhits){
-	maxnhits = ahc->GetSize();
-      }
-    }
-    cout<<"\r Divide "<<counter<<" HCs with nhits>"<<2*maxhits<<endl;
-  }
-  
-  return;
-}
-
-
-void AGATA::ClearHitLevelMarker(int val){
-  int counter = 0;
-  for(EventHits* fEvent : *fEventHits){
-    vector<Hit*>* fhits = fEvent->GetfHits();
-    for(Hit* ah : *fhits){
-      if(ah->GetLevel()==val){
-	ah->SetLevel(1);
-	counter++;
-      }
-    }
-  }
-  cout<<endl<<" Clear Level Marker "<<val<<" for "<<counter<<" hits"<<endl;
-  
-  return;
-}
-
-
-Float_t AGATA::Dist(PS *aps, PSC *apsc){
-  float dist = 0;
-#ifdef REALPOS
-  for(int ix=0; ix<3; ix++) dist += SQ(aps->detpos[ix]-apsc->cpos[ix]);
-  dist = sqrt(dist);
-#endif
-  return dist;
-}
-
-Float_t AGATA::Chi2Fast3D(PS *aps, PSC *apsc, float *Chi2Limits, float *chi2s, bool kFast){
-  float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-#ifdef WITHPS
-  // compare fired seg, core and neighbor segment
-  for(int i=0; i<3; i++) chi2s[i] = 0;
-
-  for(int i=0; i<3; i++){
-    for(int j=0; j<2; j++){
-      int iseg = 2*i+j;
-      if(aps->segwgt[iseg]>0 || apsc->segwgt[iseg]>0){
-	copy_n( aps->apulse[iseg], NSig_comp, asegpulse);
-	copy_n(apsc->cpulse[iseg], NSig_comp, bsegpulse);
-	float tmpchi2 = Chi2seg(asegpulse, bsegpulse);
-
-	chi2s[i] += tmpchi2; // sum
-	if(kFast) if(chi2s[i]>Chi2Limits[i]) return chi2s[0]; // interrupt if exceed Chi2Limits
-      }
-    }
-  }
-#endif
-
-  return chi2s[0];
-}
-
-Float_t AGATA::Chi2Fast(PS *aps, PSC *apsc, float Chi2Limit, bool kFast){
-  int nfired = 0;
-  float chi2 = 0;
-  float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-#ifdef WITHPS
-  // first compare fired seg, core and neighbor segment, then others
-  for(int iseg=0; iseg<NSeg_comp; iseg++){
-    if(aps->segwgt[iseg]>0 || apsc->segwgt[iseg]>0){
-      copy_n( aps->apulse[iseg], NSig_comp, asegpulse);
-      copy_n(apsc->cpulse[iseg], NSig_comp, bsegpulse);
-      float tmpchi2 = Chi2seg(asegpulse, bsegpulse);
-      //tmpchi2 = aps->segwgt[iseg]>0? tmpchi2*aps->segwgt[iseg] : tmpchi2*apsc->segwgt[iseg];
-      //if(tmpchi2>chi2) chi2 = tmpchi2; // maximum
-      chi2 += tmpchi2; // sum
-      if(kFast) if(chi2>Chi2Limit) return chi2; // interrupt if exceed Chi2Limit
-      nfired++;
-    }
-  }
-#endif
-  //if(nfired>0) chi2 = chi2/nfired;
-
-  return chi2;
 }
 
 
@@ -2047,6 +2139,26 @@ Float_t AGATA::Chi2seg(const float *apulse, const float *bpulse){
 }
 
 
+void AGATA::CheckPSCstat(long long *PSCstat){
+  maxnhits = 0;
+  int nPSC = 0;
+  int nEmpty = 0;
+
+  for(HitCollection *ahc : *fAllHCs){
+    int tmpnhits = ahc->GetSize();
+    if(tmpnhits>maxnhits) maxnhits = tmpnhits;
+    if(tmpnhits>0)  nPSC++;
+    if(tmpnhits==0) nEmpty++;
+  }
+
+  PSCstat[0] = maxnhits;
+  PSCstat[1] = nPSC;
+  PSCstat[2] = nEmpty;
+
+  return;
+}
+
+
 //oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo
 // EventHits
 //oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo
@@ -2065,7 +2177,7 @@ void AGATA::SortEventHits(){
 }
 
 
-int AGATA::AddEventHits(EventHits* fEvent){
+long long AGATA::AddEventHits(EventHits* fEvent){
 #ifdef NTHREADS
   lock_guard<mutex> lock(EvtHitsmtx);
 #endif
@@ -2074,10 +2186,10 @@ int AGATA::AddEventHits(EventHits* fEvent){
 }
 
 
-int AGATA::FindiEvtHit(int iconfig, int irun, int ientry, int &istart){
-  int iEvtHit = -1;
+long long AGATA::FindiEvtHit(int iconfig, int irun, int ientry, long long &istart){
+  long long iEvtHit = -1;
   int tmpconf, tmprun, tmpetry;
-  for(int i=istart; i<fEventHits->size(); i++){
+  for(long long i=istart; i<fEventHits->size(); i++){
     fEventHits->at(i)->GetIdx(tmpconf, tmprun, tmpetry);
 
     if(tmpconf<iconfig) continue; else if(tmpconf>iconfig) break;
@@ -2095,7 +2207,7 @@ int AGATA::FindiEvtHit(int iconfig, int irun, int ientry, int &istart){
 // tracking
 //oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo---oooo0000oooo
 void AGATA::TrackingLoop(){
-  int Nevts = fEventHits->size();
+  long long Nevts = fEventHits->size();
   time(&start);
 
   for(; ievt<Nevts;){ // loop events
@@ -2516,10 +2628,6 @@ void AGATA::ExecFit(int repeat){
     
     // save fit result for det0000
     string PSCPath = "PSCfiles";
-    if(kWithPS)
-      if(kGroupPos) PSCPath = "PSCfiles_GP";
-      else          PSCPath = "PSCfiles";
-    else            PSCPath = "noPS";
 
     WritePSCfiles(0);
 
@@ -2608,9 +2716,10 @@ TVector3 AGATA::GetPSpos(int detid, int segid, PS *aps){
   int ipos = -1;
 
 #ifdef PSA
-#ifdef WITHPS
   if(kPSA){
 
+    int fseg[NSeg_comp];
+    agatageo->GetNextSegs(segid, fseg);
     int npoint = fPSAbasis[itype][segid].size();
     float minchi2 = 1e9;
     float asegpulse[NSig_comp], bsegpulse[NSig_comp];
@@ -2618,28 +2727,28 @@ TVector3 AGATA::GetPSpos(int detid, int segid, PS *aps){
     for(int ipoint=0; ipoint<npoint; ipoint++){
 
       float chi2=0;
-      for(int iseg=0; iseg<NSeg_comp; iseg++){
-	copy_n( aps->apulse[iseg], NSig_comp, asegpulse);
-	copy_n(fPSAbasis[itype][segid][ipoint].spulse[iseg], NSig_comp, bsegpulse);
-	float tmpchi2 = Chi2seg(asegpulse, bsegpulse);
-	chi2 += tmpchi2; // sum
-
-	if(chi2>minchi2) break; // interrupt if exceed minchi2
+      for(int is=0; is<NSeg_comp; is++){
+	int iseg = fseg[is];
+        copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
+        copy_n(fPSAbasis[itype][segid][ipoint].spulse[is], NSig_comp, bsegpulse);
+        float tmpchi2 = Chi2seg(asegpulse, bsegpulse);
+        chi2 += tmpchi2; // sum
+	
+        if(chi2>minchi2) break; // interrupt if exceed minchi2
       }
 
       if(chi2<minchi2){
-	minchi2 = chi2;
-	ipos = ipoint;
+        minchi2 = chi2;
+        ipos = ipoint;
       }
 
     }
 
   }
 #endif
-#endif
 
   TVector3 pos;
-  if(ipos>-1){
+  if(ipos>0){
     // initial pos from PSA
     TMatrixD DetPos(3,1);
     for(int ix=0; ix<3; ix++) DetPos(ix,0) = fPSAbasis[itype][segid][ipos].pos[ix];
@@ -2650,55 +2759,10 @@ TVector3 AGATA::GetPSpos(int detid, int segid, PS *aps){
     TMatrixD SegPos = agatageo->GetSegPos(detid,segid);
     pos.SetXYZ(SegPos(0,0), SegPos(1,0), SegPos(2,0));
   }
-  
+
   return pos;
 }
 
-
-
-void AGATA::GetPSChi2sLimit(int detid, int segid, PS *aps, float chi2slimit[]){
-
-  int itype = detid%3;
-  int ipos = -1;
-
-#ifdef PSA
-#ifdef WITHPS
-
-  int npoint = fPSAbasis[itype][segid].size();
-  float minchi2 = 1e9;
-  float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-  // compare fired seg, core and neighbor segment
-  for(int ipoint=0; ipoint<npoint; ipoint++){
-
-    float chi2=0;
-    for(int iseg=0; iseg<NSeg_comp; iseg++){
-      copy_n( aps->apulse[iseg], NSig_comp, asegpulse);
-      copy_n(fPSAbasis[itype][segid][ipoint].spulse[iseg], NSig_comp, bsegpulse);
-      float tmpchi2 = Chi2seg(asegpulse, bsegpulse);
-      chi2 += tmpchi2; // sum
-
-      if(chi2>minchi2) break; // interrupt if exceed minchi2
-    }
-
-    if(chi2<minchi2){
-      minchi2 = chi2;
-      ipos = ipoint;
-    }
-
-  }
-
-#endif
-#endif
-
-  if(ipos>0){
-    // chi2slimit from PSA pos
-    double detpos[3];
-    for(int ix=0; ix<3; ix++) detpos[ix] = fPSAbasis[itype][segid][ipos].pos[ix];
-    agatageo->GetChi2sLimit(detid, detpos, chi2slimit);
-  }
-  
-  return;
-}
 
 
 
@@ -2710,25 +2774,18 @@ void AGATA::InitTreeWrite(TTree *tree){
   tree->Branch("seg",&seg);
   tree->Branch("index",&index);
   tree->Branch("nhits",&nhits);
-  tree->Branch("Marker",&Marker);
-  tree->Branch("chi2limit",chi2limit,"chi2limit[3]/F");
   tree->Branch("calpos",calpos,"calpos[3]/F");
   tree->Branch("cadpos",cadpos,"cadpos[3]/F");
   tree->Branch("calpos2",calpos2,"calpos2[3]/F");
   tree->Branch("cadpos2",cadpos2,"cadpos2[3]/F");
-#ifdef REALPOS
+
   tree->Branch("labpos",labpos,"labpos[3]/F");
   tree->Branch("detpos",detpos,"detpos[3]/F");
   tree->Branch("dist",&dist);
   tree->Branch("dist2",&dist2);
-#endif
-  if(kWithPS){
-    tree->Branch("cpos",cpos,"cpos[3]/F");
-    tree->Branch("cpulsehits",&cpulsehits);
-    tree->Branch("cpulse",cpulse,Form("cpulse[%d][%d]/F",NSeg_comp,NSig));  
-    tree->Branch("segwgt",segwgt,Form("segwgt[%d]/F",NSeg_comp));  
-    tree->Branch("spulse",spulse,Form("spulse[%d][%d]/F",NSegCore,NSig));  
-  }
+
+  tree->Branch("spulse",spulse,Form("spulse[%d][%d]/F",NSegCore,NSig));  
+
   tree->Branch("npaths",&npaths);
 }
 
@@ -2737,22 +2794,16 @@ void AGATA::InitTreeRead(TTree *tree){
   tree->SetBranchAddress("seg",&seg);
   tree->SetBranchAddress("index",&index);
   tree->SetBranchAddress("nhits",&nhits);
-  tree->SetBranchAddress("chi2limit",chi2limit);
   tree->SetBranchAddress("calpos",calpos);
   tree->SetBranchAddress("cadpos",cadpos);
   tree->SetBranchAddress("calpos2",calpos2);
   tree->SetBranchAddress("cadpos2",cadpos2);
-#ifdef REALPOS
+
   tree->SetBranchAddress("labpos",labpos);
   tree->SetBranchAddress("detpos",detpos);
-#endif
-  if(kWithPS){
-    tree->SetBranchAddress("cpos",cpos);
-    tree->SetBranchAddress("cpulse",cpulse);
-    tree->SetBranchAddress("cpulsehits",&cpulsehits);
-    tree->SetBranchAddress("segwgt",segwgt);
-    tree->SetBranchAddress("spulse",spulse);
-  }
+
+  tree->SetBranchAddress("spulse",spulse);
+
   tree->SetBranchAddress("npaths",&npaths);
 }
 

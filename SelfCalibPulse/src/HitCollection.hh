@@ -89,10 +89,6 @@ public:
   thread::id FitThreadID;
 #endif
 
-  float MaxChi2s[3]; // chi2 range for the group
-  float chi2scales[3];
-  int Marker;
-  
 private:
   int   det;
   int   seg;

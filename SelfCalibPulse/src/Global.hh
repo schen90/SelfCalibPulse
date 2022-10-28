@@ -15,22 +15,20 @@ using namespace std;
 
 #define GB 1073741824. // size of 1GB 1024*1024*1024
 #define MaxMemoryUsage 100.
-#define NTHREADS 6
-#define NTHREADS2 30
+#define NTHREADS 20
+#define NTHREADS2 50
 #define ONECLUST // make one cluster in tracking
 #define TRACKINGTREE // ouput tracking results
-#define WITHPS //comment out to save memory
-#define PSA // PSA to assign initial pos
+//#define PSA // PSA to assign initial pos
 #define MINUIT2
 //#define MULTISEG // include multi-segment events
-#define CHECKTRACK
+//#define CHECKTRACK // check track using OFT tacking
 //#define SINGLEHIT
-#define REALPOS
 #define ADDPS // input G4Tree noPS, addPS from db
 #define NOISE 1000000
-#define PSCEMIN 900. // keV, PSC greate with PS Energy > PSCEMIN
-#define MINHITS 4    // min nhits for a good HC
-#define MAXHITS 200  // half of max nhit for a HC
+#define PSCEMIN 0. // keV, PSC greate with PS Energy > PSCEMIN
+#define MINHITS 10    // min nhits for a good HC
+#define MAXHITS 5000  // max nhit for a HC
 #define SHORT
 
 // agata
@@ -81,41 +79,14 @@ struct PS{
   int   interid;  // interaction id in a event
   vector<float> hiteng; // hit energy
   float energy; // core energy
-#ifdef REALPOS
+
   float labpos[3]; // lab position
   float detpos[3]; // det position
-#endif
-  float apulse[NSeg_comp][NSig]; // adapted pulse shape for comparison
-  float segwgt[NSeg_comp];       // weight for comparison
+
   float opulse[NSegCore][NSig]; // original pulse shape
 };
 
 typedef struct PS PS;
-
-// structure for Pulse Shape Collection
-struct PSC{
-  int   det;           // detector id start from 0
-  int   seg;           // segment id start from 0
-  int   index;         // index for PSCid
-  int   nhits;         // number of hits in group
-
-  //float calpos[3];     // selfcalib interaction position in labframe float(3)
-  //float cadpos[3];     // selfcalib interaction position in detframe float(3)
-#ifdef REALPOS
-  float labpos[3];     // average interaction position in labframe float(3)
-  float detpos[3];     // average interaction position in detframe float(3)  
-  float cpos[3];       // first pulse shape position in detframe float(3)
-#endif
-
-#ifdef WITHPS
-  int   cpulsehits;              // gamma hits number of first pulse
-  float cpulse[NSeg_comp][NSig];  // first pulse shape for comparison
-  float segwgt[NSeg_comp];        // weight for comparison
-  float spulse[NSegCore][NSig];  // average pulse shape
-#endif
-};
-
-typedef struct PSC PSC;
 
 // structure for PSA basis
 struct PSAbasis{

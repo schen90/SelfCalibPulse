@@ -2,7 +2,10 @@
 #include "TInterpreter.h"
 #include "TFile.h"
 #include "TTree.h"
+#include "TChain.h"
 #include "TMatrixD.h"
+#include "TVector3.h"
+#include "TMath.h"
 #include "TH1.h"
 #include "TH2.h"
 #include "TCanvas.h"
@@ -14,15 +17,16 @@
 #include <vector>
 
 // draw selection
-int detid = 0;
+int detid = 15;
 int segid = 2;
-int nhitslimit = 10;
-int Number = 1;
+int nhitslimit = 200;
+int Number = 3;
 
 
 struct HitCollection{
   int det;
   int seg;
+  int pscid;
   int nhits;
 
   float labpos[3];
@@ -42,12 +46,16 @@ struct Hit{
   float detpos[3];
 };
 
+vector<HitCollection> fAllHCs; // Hit Collection storage
+vector<Hit> fHits; //fHits in Events for tracking
+
 using namespace std;
 
 // transform matrix
 Int_t NDets = 0;
 TMatrixD Rt[180];
 TMatrixD Tr[180];
+
 
 void LoadMatrix(string LookUpTable){
   // find input LookUpTable
@@ -91,25 +99,37 @@ TMatrixD Lab2DetPos(Int_t idet, TMatrixD LabPos){
 }
 
 
+int FindHC(int detid, int segid, int pscid){
+  int ipsc = -1;
+  int npsc = fAllHCs.size();
+  for(int i=0; i<npsc; i++){
+    int tmpid = fAllHCs[i].pscid;
+    if     (tmpid <  pscid) continue;
+    else if(tmpid == pscid){ ipsc=i; break;}
+    else if(tmpid >  pscid) break;
+  }
+  return ipsc;
+}
+
+
 void DrawHC(){
   gInterpreter->GenerateDictionary("vector<vector<int>>","vector");
 
   LoadMatrix("LookUp/CrystalPositionLookUpTable");
   
-  vector<HitCollection> fAllHCs; // Hit Collection storage
-  vector<Hit> fHits; //fHits in Events for tracking
-
   int det;
   int seg;
+  int pscid;
 
   float labpos[3];
 
   // HitCollection
-  TFile *hcfile = new TFile("HCfiles/AllHCs.root");
-  TTree *hctree = (TTree *)hcfile->Get("hctree");
+  TFile *hcfile = new TFile(Form("share/HCs/Det%04d.root",detid));
+  TTree *hctree = (TTree *)hcfile->Get(Form("tree%d",segid));
 
   hctree->SetBranchAddress("det",&det);
   hctree->SetBranchAddress("seg",&seg);
+  hctree->SetBranchAddress("index",&pscid);
 
   hctree->SetBranchAddress("labpos",labpos); // real position in lab frame
 
@@ -122,6 +142,7 @@ void DrawHC(){
     HitCollection ahc;
     ahc.det = det;
     ahc.seg = seg;
+    ahc.pscid = pscid;
     ahc.nhits = 0;
 
     TMatrixD LabPos(3,1);
@@ -138,56 +159,59 @@ void DrawHC(){
   cout<<"\r load "<<ihc<<" / "<<Nhcs<<" HitCollections..."<<endl;
 
   // Hit
-  TFile *hfile = new TFile("HCfiles/EventHits.root");
-  TTree *htree = (TTree *)hfile->Get("htree");
-  vector<int>            *vdet = 0;
-  vector<int>            *vseg = 0;
-  vector<vector<int>>    *vhcid = 0;
-  vector<float>          *vdepE = 0;
-  vector<vector<double>> *vlabpos = 0;
-
-  htree->SetBranchAddress("det",&vdet);
-  htree->SetBranchAddress("seg",&vseg);
-  htree->SetBranchAddress("hcid",&vhcid);
-  htree->SetBranchAddress("depE",&vdepE);
-  htree->SetBranchAddress("labpos",&vlabpos);
-
-  int Nevts = htree->GetEntriesFast();
-  int ievt, hid=0;
-  for(ievt=0; ievt<Nevts; ievt++){
-    if(ievt%1000==0) cout<<"\r load "<<ievt<<" / "<<Nevts<<" EventHits..."<<flush;
-    htree->GetEntry(ievt);
-
-    for(int i=0; i<vdet->size(); i++){
-      det = vdet->at(i);
-      seg = vseg->at(i);
-
-      float depE = vdepE->at(i); // keV
-      TMatrixD LabPos(3,1);
-      for(int it=0; it<3; it++) LabPos(it,0) = vlabpos->at(i)[it];
-      TMatrixD DetPos= Lab2DetPos(det,LabPos);
-      
-      Hit ahit;
-      ahit.det = det;
-      ahit.seg = seg;
-      ahit.depE = depE;
-
-      for(int it=0; it<3; it++){
-	ahit.labpos[it] = LabPos(it,0);
-	ahit.detpos[it] = DetPos(it,0);
-      }
-      fHits.push_back(ahit);
-
-      // connect with HCs
-      for(int ii=0; ii<vhcid->at(i).size(); ii++){
-	ihc = vhcid->at(i)[ii];
-	fAllHCs[ihc].hid.push_back(hid);
-	fAllHCs[ihc].nhits++;
-      }
-      hid++;
+  TChain *htree = new TChain();
+  int minrun[3] = {   0,   0,   0};
+  int maxrun[3] = {5000,2500,2500};
+  for(int input=0; input<3; input++){
+    cout<<"chain input"<<input<<" run "<<minrun[input]<<" ~ "<<maxrun[input]<<endl;
+    for(int run=minrun[input]; run<maxrun[input]; run++){
+      htree->AddFile(Form("./share/Hits/input%d/run%04d_det%04d.root",input,run,detid),0,"tree");
     }
   }
-  cout<<"\r load "<<ievt<<" / "<<Nevts<<" EventHits..."<<endl;
+
+  vector<int>    *vhcid = 0;
+  float           depE;
+
+  htree->SetBranchAddress("det",&det);
+  htree->SetBranchAddress("seg",&seg);
+  htree->SetBranchAddress("hcid",&vhcid);
+  htree->SetBranchAddress("depE",&depE);
+  htree->SetBranchAddress("labpos",labpos);
+
+  cout<<"start load Hits..."<<endl;
+  long long Nevts = htree->GetEntriesFast();
+  long long ievt, hid=0;
+  for(ievt=0; ievt<Nevts; ievt++){
+    if(ievt%1000==0) cout<<"\r load "<<ievt<<" / "<<Nevts<<" Hits..."<<flush;
+    htree->GetEntry(ievt);
+
+    if(seg!=segid) continue;
+
+    TMatrixD LabPos(3,1);
+    for(int it=0; it<3; it++) LabPos(it,0) = labpos[it];
+    TMatrixD DetPos= Lab2DetPos(det,LabPos);
+      
+    Hit ahit;
+    ahit.det = det;
+    ahit.seg = seg;
+    ahit.depE = depE;
+
+    for(int it=0; it<3; it++){
+      ahit.labpos[it] = LabPos(it,0);
+      ahit.detpos[it] = DetPos(it,0);
+    }
+    fHits.push_back(ahit);
+
+    // connect with HCs
+    for(int ii=0; ii<vhcid->size(); ii++){
+      ihc = FindHC(detid, segid, vhcid->at(ii));
+      fAllHCs[ihc].hid.push_back(hid);
+      fAllHCs[ihc].nhits++;
+    }
+    hid++;
+
+  }
+  cout<<"\r load "<<ievt<<" / "<<Nevts<<" Hits..."<<endl;
 
 
   TH1D *hnhits = new TH1D("h","nhits",50,-0.5,49.5);
@@ -209,11 +233,17 @@ void DrawHC(){
     hxy0->Fill(x,y);
     hxz0->Fill(x,z);
 
+    TVector3 vec(x,y,0);
+    float phi = vec.Phi()/TMath::Pi()*180;
+    float r = vec.Mag();
+
     if(dihc<0){
       if(fAllHCs[ihc].seg!=segid) continue;
       if(fAllHCs[ihc].nhits<nhitslimit) continue;
-      if(sqrt(x*x+y*y)<25) continue;
-      if(sqrt(x*x+y*y)>35) continue;
+      if(r<15) continue;
+      if(r>25) continue;
+      //if(!(phi>-3&&phi<2)) continue;
+      if(!(phi>15&&phi<30)) continue;
       dihc++;
       if(dihc==0) dihc = ihc;
     }
@@ -236,7 +266,7 @@ void DrawHC(){
   cout<<"Draw det"<<fAllHCs[dihc].det<<" seg"<<fAllHCs[dihc].seg<<" nhits-"<<fAllHCs[dihc].nhits<<endl;
 
   //hnhits->Draw();
-  TCanvas *c = new TCanvas("c","c",800,800);
+  TCanvas *c = new TCanvas("c","c",600,600);
   c->Divide(2,2);
   c->cd(1);
   hxy0->Draw("colz");
