@@ -1,6 +1,0 @@
-#input 0
-source 2000 0 0 0
-path G4Sim/rootfiles3/noPS
-run 0 499
-nevt -1
-
