@@ -71,6 +71,7 @@ public:
 
   int   InitPSCandHC(int detid, int segid);
   void  FindInitZone(PS *aps, vector<int> *initzone);
+  void  FindInitPSC(Hit *ahit, vector<int> *initpsc);
   int   AddPS(PS *aps, Hit *ahit);
   int   AddPStoPSC(PS *aps, Hit *ahit, int ipsc);
   float FindMaxDev(PS *aps, Hit *ahit);

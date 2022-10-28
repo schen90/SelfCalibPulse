@@ -20,6 +20,7 @@ using namespace std;
 #define ONECLUST // make one cluster in tracking
 #define TRACKINGTREE // ouput tracking results
 //#define PSA // PSA to assign initial pos
+#define RADIUS0 2 // mm, initial PSC size from PSA
 #define MINUIT2
 //#define MULTISEG // include multi-segment events
 //#define CHECKTRACK // check track using OFT tacking
@@ -47,7 +48,7 @@ using namespace std;
 #define LOOP_SSE8_seg 7
 
 //#define SSE_M256
-#define CHI2        1
+#define CHI2        3
 #define CHI2_SQ     0
 #define CHI2_CHI2   1
 #define CHI2_CHI2_2 2
