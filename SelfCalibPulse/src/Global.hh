@@ -15,21 +15,21 @@ using namespace std;
 
 #define GB 1073741824. // size of 1GB 1024*1024*1024
 #define MaxMemoryUsage 100.
-#define NTHREADS 2
-#define NTHREADS2 2
+#define NTHREADS 6
+#define NTHREADS2 30
 #define ONECLUST // make one cluster in tracking
 #define TRACKINGTREE // ouput tracking results
 #define WITHPS //comment out to save memory
 #define PSA // PSA to assign initial pos
 #define MINUIT2
 //#define MULTISEG // include multi-segment events
-//#define CHECKTRACK // check track using OFT tacking
+#define CHECKTRACK
 //#define SINGLEHIT
 #define REALPOS
-//#define ADDPS // input G4Tree noPS, addPS from db
-//#define NOISE 1000000
-#define PSCEMIN 0. // keV, PSC greate with PS Energy > PSCEMIN
-#define MINHITS 1    // min nhits for a good HC
+#define ADDPS // input G4Tree noPS, addPS from db
+#define NOISE 1000000
+#define PSCEMIN 900. // keV, PSC greate with PS Energy > PSCEMIN
+#define MINHITS 4    // min nhits for a good HC
 #define MAXHITS 200  // half of max nhit for a HC
 #define SHORT
 

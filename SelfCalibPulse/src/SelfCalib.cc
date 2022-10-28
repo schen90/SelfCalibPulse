@@ -63,7 +63,7 @@ int main(int argc, char* argv[]){
   double Diff = -1;
   string chi2mapfile;
   float chi2scale = 1;
-  
+
   if(argc==1){
     help();
     return 0;
@@ -204,7 +204,9 @@ int main(int argc, char* argv[]){
   cout<<Form("Without noise, Initial chi2s limits: %.1f  %.1f  %.1f",chi2slimit[0],chi2slimit[1],chi2slimit[2])<<endl;
 
 #endif
+
   if(kMAP) agata->LoadGridChi2sMap(chi2mapfile.c_str(), chi2scale);
+
   
 
   //*****************************************//
@@ -248,7 +250,7 @@ int main(int argc, char* argv[]){
     agata->SetAddNewPSC(false);
 
 
-    /*
+
     // remove PSCs with nhits<MINHITS, and divide PSCs with nhits>MAXHITS
     time(&stepstart);
     agata->CheckPSCs(MINHITS,MAXHITS);
@@ -273,7 +275,7 @@ int main(int argc, char* argv[]){
     treereader->SetNewPSC(false);
     agata->SetAddNewPSC(false);
     agata->ClearHitLevelMarker(2);
-    */
+
 
     // save grouped HCs and Hits
     time(&stepstart);

@@ -700,8 +700,6 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
     }//end of loop dets
   }
 
-  if(fPS.size()<2) return; // at least one Compton scattering
-
   // create Hit-----------------------------------------------
   vector<int> uflag;
   EventHits* fEvent = new EventHits(SourceE, SourcePos);
@@ -996,19 +994,16 @@ void TreeReaderPulse::UpdateHCsworker(int iconfig, int run, int iChain, AGATA *a
   vector<Hit*>* fHits = agata->FindEventHits(iEvtHit)->GetfHits();
   vector<int> uflag;
   for(int i=0; i<fHits->size(); i++){ //loop fPS
-    uflag.push_back(1);
+    uflag.push_back(0);
   }
   istart = iEvtHit;
 
-#ifdef CHECKTRACK
   // check track----------------------------------------------
   Tracker tracker(fHits, (Double_t)SourceE, SourcePos);
   tracker.OFTtracking();
   vector<int> atrack = tracker.GetTrack();
-  for(int i=0; i<fHits->size(); i++) uflag[i] = 0;
   if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
-#endif
-  
+
   bool kFindPS = false;
   // check if need to compare hits with HCs
   for(int i=0; i<fHits->size(); i++){

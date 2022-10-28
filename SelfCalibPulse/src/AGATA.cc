@@ -2639,7 +2639,7 @@ TVector3 AGATA::GetPSpos(int detid, int segid, PS *aps){
 #endif
 
   TVector3 pos;
-  if(ipos>0){
+  if(ipos>-1){
     // initial pos from PSA
     TMatrixD DetPos(3,1);
     for(int ix=0; ix<3; ix++) DetPos(ix,0) = fPSAbasis[itype][segid][ipos].pos[ix];
