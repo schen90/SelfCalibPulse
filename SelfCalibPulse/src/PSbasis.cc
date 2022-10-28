@@ -18,11 +18,6 @@
 using namespace std;
 
 PSbasis::PSbasis(){
-  PSbasis(-1);
-}
-
-PSbasis::PSbasis(int detid){
-  Detid = detid;
   ReadPSbasis();
 }
 
@@ -34,12 +29,10 @@ void PSbasis::ReadPSbasis(){
 
   cout<<"\e[1;31m Read basis for linear interpolation PS: \e[0m"<<endl;
   string dbfile[3] = {"G4Sim/pulsedb/LibTrap_A001.root",
-		      "G4Sim/pulsedb/LibTrap_B001.root",
-		      "G4Sim/pulsedb/LibTrap_C001.root"};
+                      "G4Sim/pulsedb/LibTrap_B001.root",
+                      "G4Sim/pulsedb/LibTrap_C001.root"};
 
   for(int itype=0; itype<NType; itype++){
-
-    if(Detid>-1 && itype!=Detid%3) continue;
 
     for(int ix=0; ix<3; ix++){
       range[itype][ix][0] = 1000;
@@ -110,12 +103,11 @@ void PSbasis::ReadPSbasis(){
   return;
 }
 
+
 Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD &spulse) {
 
   int ngrid = 0;
 
-  if(Detid>-1 && itype!=Detid%3) return ngrid;
-  
   int idx[3];
   for(int ix=0; ix<3; ix++){
     idx[ix] = (int)((pos(ix,0)-range[itype][ix][0]) / GridDist + 0.5);
@@ -135,35 +127,35 @@ Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD 
   for(int ix=idx[0]-idxrange; ix<=idx[0]+idxrange; ix++)
     for(int iy=idx[1]-idxrange; iy<=idx[1]+idxrange; iy++)
       for(int iz=idx[2]-idxrange; iz<=idx[2]+idxrange; iz++){
-	if(ix<0 || ix>=GridMaxSteps) continue;
-	if(iy<0 || iy>=GridMaxSteps) continue;
-	if(iz<0 || iz>=GridMaxSteps) continue;
+        if(ix<0 || ix>=GridMaxSteps) continue;
+        if(iy<0 || iy>=GridMaxSteps) continue;
+        if(iz<0 || iz>=GridMaxSteps) continue;
 
-	int ipoint = imap[itype][ix][iy][iz];
-	if(ipoint<0) continue;
+        int ipoint = imap[itype][ix][iy][iz];
+        if(ipoint<0) continue;
 
 	if(kextrapol){
-	  if(fabs(pos(0,0)-dbpos[itype][ipoint](0,0))>4) continue;
-	  if(fabs(pos(1,0)-dbpos[itype][ipoint](1,0))>4) continue;
-	  if(fabs(pos(2,0)-dbpos[itype][ipoint](2,0))>4) continue;
-	  double disttmp = sqrt((pos-dbpos[itype][ipoint]).Sqr().Sum());
-	  ip2.push_back(ipoint);
-	  ip2dist.push_back(disttmp);
-	}
+          if(fabs(pos(0,0)-dbpos[itype][ipoint](0,0))>4) continue;
+          if(fabs(pos(1,0)-dbpos[itype][ipoint](1,0))>4) continue;
+          if(fabs(pos(2,0)-dbpos[itype][ipoint](2,0))>4) continue;
+          double disttmp = sqrt((pos-dbpos[itype][ipoint]).Sqr().Sum());
+          ip2.push_back(ipoint);
+          ip2dist.push_back(disttmp);
+        }
 
 	if(fabs(pos(0,0)-dbpos[itype][ipoint](0,0))>2) continue;
-	if(fabs(pos(1,0)-dbpos[itype][ipoint](1,0))>2) continue;
-	if(fabs(pos(2,0)-dbpos[itype][ipoint](2,0))>2) continue;
-	double disttmp = sqrt((pos-dbpos[itype][ipoint]).Sqr().Sum());
-	ip.push_back(ipoint);
-	ipdist.push_back(disttmp);
-	if(disttmp<mindist){
-	  mindist = disttmp;
-	  minip = ipoint;
-	  tmpseg = dbseg[itype][ipoint]; // seg of closest grid point
-	}
+        if(fabs(pos(1,0)-dbpos[itype][ipoint](1,0))>2) continue;
+        if(fabs(pos(2,0)-dbpos[itype][ipoint](2,0))>2) continue;
+        double disttmp = sqrt((pos-dbpos[itype][ipoint]).Sqr().Sum());
+        ip.push_back(ipoint);
+        ipdist.push_back(disttmp);
+        if(disttmp<mindist){
+          mindist = disttmp;
+          minip = ipoint;
+          tmpseg = dbseg[itype][ipoint]; // seg of closest grid point
+        }
 
-	if(kextrapol){ ip2.pop_back(); ip2dist.pop_back();}
+        if(kextrapol){ ip2.pop_back(); ip2dist.pop_back();}
       }
 
   if(tmpseg<0){ // remove evt if interaction point outside grid map
@@ -185,8 +177,8 @@ Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD 
   for(int i=0; i<ip.size(); i++){
     for(int j=i+1; j<ip.size(); j++){
       if(ipdist[i] > ipdist[j]){
-	swap(ipdist, i, j);
-	swap(ip, i, j);
+        swap(ipdist, i, j);
+        swap(ip, i, j);
       }
     }
   }
@@ -196,25 +188,25 @@ Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD 
     if(ip.size()<8){
       // remove grid from different segment
       for(int i=0; i<ip2.size();){
-	if(dbseg[itype][ip2[i]]!=tmpseg){
-	  ip2.erase(ip2.begin()+i);
-	  ip2dist.erase(ip2dist.begin()+i);
-	}else{
-	  i++;
-	}
+        if(dbseg[itype][ip2[i]]!=tmpseg){
+          ip2.erase(ip2.begin()+i);
+          ip2dist.erase(ip2dist.begin()+i);
+        }else{
+          i++;
+        }
       }
       // sort according to dist
       for(int i=0; i<ip2.size(); i++){
-	for(int j=i+1; j<ip2.size(); j++){
-	  if(ip2dist[i] > ip2dist[j]){
-	    swap(ip2dist, i, j);
-	    swap(ip2, i, j);
-	  }
-	}
+        for(int j=i+1; j<ip2.size(); j++){
+          if(ip2dist[i] > ip2dist[j]){
+            swap(ip2dist, i, j);
+            swap(ip2, i, j);
+          }
+        }
       }
       // add extrapolation points
       for(int i=0; i<ip2.size();i++){
-	ip.push_back(ip2[i]);
+        ip.push_back(ip2[i]);
       }
     }
   }
@@ -224,7 +216,7 @@ Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD 
 
     ngrid = 1;
     spulse = energy*dbspulse[itype][minip];
-    
+
   }else{// more than 1 grid
 
     // prepare spulse list
@@ -244,62 +236,62 @@ Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD 
       int iaxis2 = (iaxis+2)%3;
 
       for(int i=0; i<poslist.size(); ){
-	for(int j=i+1; j<poslist.size(); ){
-	  bool kcombine = true;
-	  if(fabs(poslist[i](iaxis1,0)-poslist[j](iaxis1,0))>0.1) kcombine = false;
-	  if(fabs(poslist[i](iaxis2,0)-poslist[j](iaxis2,0))>0.1) kcombine = false;
+        for(int j=i+1; j<poslist.size(); ){
+          bool kcombine = true;
+          if(fabs(poslist[i](iaxis1,0)-poslist[j](iaxis1,0))>0.1) kcombine = false;
+          if(fabs(poslist[i](iaxis2,0)-poslist[j](iaxis2,0))>0.1) kcombine = false;
 
-	  if(kcombine){
-	    double factori = (pos(iaxis,0)-poslist[j](iaxis,0)) / (poslist[i](iaxis,0)-poslist[j](iaxis,0));
-	    double factorj = (pos(iaxis,0)-poslist[i](iaxis,0)) / (poslist[j](iaxis,0)-poslist[i](iaxis,0));
-	    spulselist[i] = factori*spulselist[i] + factorj*spulselist[j];
-	    poslist[i](iaxis,0) = pos(iaxis,0);
+          if(kcombine){
+            double factori = (pos(iaxis,0)-poslist[j](iaxis,0)) / (poslist[i](iaxis,0)-poslist[j](iaxis,0));
+            double factorj = (pos(iaxis,0)-poslist[i](iaxis,0)) / (poslist[j](iaxis,0)-poslist[i](iaxis,0));
+            spulselist[i] = factori*spulselist[i] + factorj*spulselist[j];
+            poslist[i](iaxis,0) = pos(iaxis,0);
 
-	    if(factori==0){
-	      igridlist[i].clear();
-	    }
+            if(factori==0){
+              igridlist[i].clear();
+            }
 
-	    if(factorj!=0)
-	      for(int ig=0; ig<igridlist[j].size(); ig++){
-		igridlist[i].push_back(igridlist[j][ig]);
-	      }
+            if(factorj!=0)
+              for(int ig=0; ig<igridlist[j].size(); ig++){
+                igridlist[i].push_back(igridlist[j][ig]);
+              }
 
-	    spulselist.erase(spulselist.begin()+j);
-	    poslist.erase(poslist.begin()+j);
-	    igridlist.erase(igridlist.begin()+j);
+            spulselist.erase(spulselist.begin()+j);
+            poslist.erase(poslist.begin()+j);
+            igridlist.erase(igridlist.begin()+j);
 
-	  }else{
-	    j++;
-	  }
-	}// end of loop j
-
-	if(!kextrapol) poslist[i](iaxis,0) = pos(iaxis,0); // reduced interpolation
-	i++;
+          }else{
+            j++;
+          }
+        }// end of loop j
+	
+        if(!kextrapol) poslist[i](iaxis,0) = pos(iaxis,0); // reduced interpolation
+        i++;
       }// end of loop i
     }// end of loop iaxis
 
     if(poslist.size()>1){
 
       if(!kextrapol){
-	cerr<<"something wrong..."<<endl;
+        cerr<<"something wrong..."<<endl;
 
       }else{ // if use extrapolation
+	
+        while(poslist.size()>0){
+          if(fabs(pos(0,0)-poslist[0](0,0))<0.01 &&
+             fabs(pos(1,0)-poslist[0](1,0))<0.01 &&
+             fabs(pos(2,0)-poslist[0](2,0))<0.01)
+            break;
 
-	while(poslist.size()>0){
-	  if(fabs(pos(0,0)-poslist[0](0,0))<0.01 &&
-	     fabs(pos(1,0)-poslist[0](1,0))<0.01 &&
-	     fabs(pos(2,0)-poslist[0](2,0))<0.01)
-	    break;
+          spulselist.erase(spulselist.begin());
+          poslist.erase(poslist.begin());
+          igridlist.erase(igridlist.begin());
+        }
 
-	  spulselist.erase(spulselist.begin());
-	  poslist.erase(poslist.begin());
-	  igridlist.erase(igridlist.begin());
-	}
-
-	if(poslist.size()==0){ // cannot get simulated position in XYZ combine
-	  ngrid = -1;
-	  return ngrid;
-	}// end of cannot get simulated position in XYZ combine
+        if(poslist.size()==0){ // cannot get simulated position in XYZ combine
+          ngrid = -1;
+          return ngrid;
+        }// end of cannot get simulated position in XYZ combine
 	
       }// end of kextrapol
       
@@ -310,7 +302,5 @@ Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD 
     
   } // end of more than 1 grid
 
-  return ngrid;  
+  return ngrid;
 }
-
-

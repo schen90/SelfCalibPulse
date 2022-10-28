@@ -7,24 +7,31 @@
 class PSC {
 
 public:
-  PSC(Int_t detid, Int_t segid){ det=detid; seg=segid;}
+  PSC(Int_t detid, Int_t segid){
+    det=detid;
+    seg=segid;
+    nhits=0;
+
+    for(int ix=0; ix<3; ix++)
+      avelpos[ix] = avedpos[ix] = 0;
+
+    for(int iseg=0; iseg<NSegCore; iseg++)
+      for(int isig=0; isig<NSig; isig++)
+	spulse[iseg][isig] = 0;
+  }
+  
   ~PSC(){;}
 
   int   det;
   int   seg;
-  int   index;         // index for PSCid
   int   nhits;         // number of hits in group
+  
+  float labpos[3];     // position in labframe float(3)
+  float detpos[3];     // position in detframe float(3)
 
-  int   divzone[NSeg_comp]; // divided zone
-  vector<int> dividx;  // idx of daughter PSCs
+  float avelpos[3];    // average interaction position in labframe float(3)
+  float avedpos[3];    // average interaction position in detframe float(3)  
 
-  float labpos[3];     // average interaction position in labframe float(3)
-  float detpos[3];     // average interaction position in detframe float(3)
-
-  int   segcmp[NSeg_comp];        // segments for comparison
-  float devabscut[NSeg_comp];
-  //float maxdevabs[NSeg_comp];     // max deviation (abs) value
-  vector<float> devabs[NSeg_comp];     // all deviation (abs) values
   float spulse[NSegCore][NSig];   // average pulse shape
 };
 

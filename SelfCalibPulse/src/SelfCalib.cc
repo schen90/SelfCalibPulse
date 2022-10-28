@@ -22,18 +22,14 @@ void help(){
   cout<<setw(30)<<left<<" -h"<<" : print options"<<endl
       <<setw(30)<<left<<" -config configurefile"<<" : read G4SimTree from configure file"<<endl
       <<setw(30)<<left<<" -init"<<" : initial folders for selfcalib"<<endl
-      <<setw(30)<<left<<" -gp i"<<" : group pulse shape for det i.  i=-1 : all det"<<endl
-      <<setw(30)<<left<<" -PSA"<<" : PSA to assign initial hit pos"<<endl
-      <<setw(30)<<left<<" -comb"<<" : combine Hit files for every run"<<endl
       <<setw(30)<<left<<" -Fit"<<" : Fit HCs pos"<<endl
-      <<setw(30)<<left<<" -loop Ntrack Nfit"<<" : set iterate Ntrack Nfit"<<endl
-      <<setw(30)<<left<<" -scanPS Nevts Diff"<<" : scan Pulse Shape for one detector to compare Chi2"<<endl
+      <<setw(30)<<left<<" -loop Nfit"<<" : set iterate Nfit"<<endl
       <<endl;
   return;
 }
 
+
 int main(int argc, char* argv[]){
-  
   gInterpreter->GenerateDictionary("vector<vector<int>>","vector");
   gInterpreter->GenerateDictionary("vector<vector<float>>","vector");
 
@@ -41,30 +37,21 @@ int main(int argc, char* argv[]){
   ROOT::EnableThreadSafety();
 #endif
 
-  //gROOT->ProcessLine("gErrorIgnoreLevel = 2002;");
-
   // run options
   bool kConfig     = false;
   bool kMakeInit   = false;
-  bool kGroupPulse = false;
-  bool kPSA        = false;
-  bool kComb       = false;
   bool kFit        = false;
-  bool kScanPS     = false;
-  
+
   string configfile;
-  int Detid = -1;
-  int NFullLoop = 0;
   int NFitLoop = 0;
   string PSCPath = "PSCfiles";
   int MaxEvts = -1;
-  double Diff = -1;
-  
+
   if(argc==1){
     help();
     return 0;
   }
-  
+
   for(int i=1; i<argc; i++){
     if(TString(argv[i]) == "-h"){
       help();
@@ -74,22 +61,10 @@ int main(int argc, char* argv[]){
       configfile = string(argv[++i]);
     }else if(TString(argv[i]) == "-init"){
       kMakeInit = true;
-    }else if(TString(argv[i]) == "-gp"){
-      kGroupPulse = true;
-      Detid = atoi(argv[++i]);
-    }else if(TString(argv[i]) == "-PSA"){
-      kPSA = true;
-    }else if(TString(argv[i]) == "-comb"){
-      kComb = true;
     }else if(TString(argv[i]) == "-Fit"){
       kFit = true;
     }else if(TString(argv[i]) == "-loop"){
-      NFullLoop = atoi(argv[++i]);
       NFitLoop = atoi(argv[++i]);
-    }else if(TString(argv[i]) == "-scanPS"){
-      kScanPS = true;
-      MaxEvts = atoi(argv[++i]);
-      Diff = atof(argv[++i]);
     }
 
   }
@@ -101,36 +76,17 @@ int main(int argc, char* argv[]){
 
   if(kMakeInit) cout<<"ClearFolder; ";
 
-  if(kGroupPulse){
-    cout<<"Group";
-    if(Detid>-1) cout<<" Det "<<Detid;
-    else         cout<<" AllDet";
-    cout<<"; ";
-#ifdef ADDPS
-    cout<<"AddPS; ";
-#endif
-    if(kPSA) cout<<"PSA; ";
-  }
+  if(kFit) cout<<"Fit loop "<<" "<<NFitLoop<<"; ";
 
-  if(kComb) cout<<"Combine Hitfiles; ";
-  if(kFit) cout<<"Fit loop "<<NFullLoop<<" "<<NFitLoop<<"; ";
-  
   cout<<"MaxMem - "<<MaxMemoryUsage<<"%; ";
 
 #ifdef NTHREADS
-  if(kGroupPulse) cout<<"NthrdsGP - "<<NTHREADS<<"; ";
-#endif
-#ifdef NTHREADS2
-  if(kFit) cout<<"NthrdsFit - "<<NTHREADS2<<"; ";
+  if(kFit) cout<<"NthrdsFit - "<<NTHREADS<<"; ";
 #endif
 
-  if(kScanPS){
-    cout<<"ScanPS ";
-  }
-  
   cout<<"\e[0m"<<endl;
 
-  
+
   // clock
   time_t start, stop;
   time_t stepstart, stepstop;
@@ -151,16 +107,11 @@ int main(int argc, char* argv[]){
     return 1;
   }
 
-  // check run opt
-  if(kFit && Detid>-1){
-    cerr<<"Cannot fit HC pos for one det!!!"<<endl;
-    return 1;
-  }
-  
+
   // init TreeReader
   TreeReaderPulse* treereader;
-  if(kMakeInit || kGroupPulse || kScanPS){
-    treereader = new TreeReaderPulse(Detid);
+  if(kMakeInit || kFit){
+    treereader = new TreeReaderPulse();
     treereader->Load(configfile);
     treereader->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
   }
@@ -171,148 +122,69 @@ int main(int argc, char* argv[]){
     treereader->MakeInit();
   }
 
-
   // init AGATA
-  AGATA *agata = new AGATA(Detid);  
+  AGATA *agata = new AGATA();
   agata->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
-  agata->SetPSA(kPSA);
 
 #ifdef NOISE
   cout<<Form("With noise")<<endl;
 #else
   cout<<Form("Without noise")<<endl;
 #endif
-  
-
-  //*****************************************//
-  // Scan PS to determine chi2slimit
-  //*****************************************//
-  if(kScanPS){
-    treereader->ScanPS(agata, MaxEvts, Diff);
-    delete treereader;
-    delete agata;
-    time(&stop);
-    printf("\n============ Elapsed time: %.1f seconds =============\n",difftime(stop,start));
-    return 0;
-  }
-  
 
   //*****************************************//
   // Generate HitCollections
   //*****************************************//
-  if(kGroupPulse){
-
-    time(&stepstart);
-    if(kConfig) treereader->GenerateHCs(0,agata);
-    time(&stepstop);
-    printf("=== InitialHCs time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-
-    int ndiv = 0;
-    long long PSCstat[10];
-    agata->CheckPSCstat(PSCstat);
-    while(PSCstat[0]>MAXHITS){
-      cout<<"\033[1;31m"<<"Divide "<<ndiv<<": \033[0m"<<endl;
-      
-      time(&stepstart);
-      if(kConfig) treereader->GenerateHCs(1,agata);
-      if(kConfig) agata->FindDevCut();
-      time(&stepstop);
-      printf("=== FindMaxDeviation time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-
-      time(&stepstart);
-      if(kConfig) treereader->GenerateHCs(2,agata);
-      time(&stepstop);
-      printf("=== Divide PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-
-      time(&stepstart);
-      if(kConfig) agata->RemoveMotherPSC();
-      if(kConfig) agata->RemoveSmallPSC(MINHITS);
-      time(&stepstop);
-      printf("=== Remove PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-      
-      agata->CheckPSCstat(PSCstat);
-      cout<<"\033[1m"<<"PSC stats:"
-	  <<"  maxnhits = "<<PSCstat[0]
-	  <<" ; nPSC = "<<PSCstat[1]
-	  <<" ; nEmpty = "<<PSCstat[2]
-	  <<"\033[0m"<<endl<<endl;
-      ndiv++;
-    }
-    
-    // save grouped HCs and Hits
-    time(&stepstart);
-    agata->WritePSCfiles(Detid);
-    agata->WriteHCfiles(Detid);
-    agata->WriteEvtHitsfiles(Detid);
-    time(&stepstop);
-    printf("=== Write initial PSC&HC&Hits files time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-  }
-
-
-  if(kComb){
-    time(&stepstart);
-    agata->Load(configfile);
-    agata->CombEvtHitsfiles();
-    time(&stepstop);
-    printf("=== Combine Hitfiles time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-  }
-
-  
-  //*****************************************//
-  // HitCollections position optimization
-  //*****************************************//
+  gROOT->ProcessLine(Form(".!rm -rf %s/iter/it[0-9]*",PSCPath.c_str()));
   if(kFit){
-
-    if(!kGroupPulse){
-      // read data from PSCfiles and HCfiles
-      time(&stepstart);
-      agata->Load(configfile);
-      agata->LoadHCfiles();
-      agata->LoadEvtHitsconfigs();
-      agata->LoadPSCfiles(0);
-      time(&stepstop);
-      printf("=== Load HC&EventHits time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-    }
-    
-
-    // HCs position optimize
-    gROOT->ProcessLine(Form(".!rm -rf %s/iter/it[0-9]*",PSCPath.c_str()));
-    for(int FullCounter=0; FullCounter<NFullLoop; FullCounter++){
-
-      cout<<"\e[1;31m"<<"Full iteration "<<FullCounter<<" : \e[0m"<<endl;
-
-      time(&stepstart);
-      agata->Tracking(FullCounter);
-      time(&stepstop);
-      printf("=== Tracking time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-
-      time(&stepstart);
-      agata->RegisterPathswithHCs();
-      time(&stepstop);
-      printf("=== Register Paths time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-  
-      time(&stepstart);
-      agata->ExecFit(NFitLoop);
-      gROOT->ProcessLine(Form(".!mv -f %s/iter/it %s/iter/it%d",PSCPath.c_str(),PSCPath.c_str(),FullCounter));
-      gROOT->ProcessLine(Form(".!mkdir %s/iter/it",PSCPath.c_str()));
-      time(&stepstop);
-      printf("=== Fit time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-
-    }
-
-    /*
-    // write to PSCfiles
     time(&stepstart);
-    agata->WritePSCfiles();
+    agata->InitPSC();
+    time(&stepstop);
+    printf("=== Create Init PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+    for(int ifit=0; ifit<NFitLoop; ifit++){
+      cout<<"Fit repeat "<<ifit<<" times.."<<endl;
+
+      if(ifit>0){
+	time(&stepstart);
+	agata->CopyPSC();
+	time(&stepstop);
+	printf("=== Copy PSC1 to PSC0 time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+      
+	time(&stepstart);
+	agata->ClearPSC1();
+	time(&stepstop);
+	printf("=== Clear PSC1 time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+      }
+      
+      time(&stepstart);
+      treereader->GeneratePSC(agata);
+      time(&stepstop);
+      printf("=== Generate PSC1 time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+      time(&stepstart);
+      agata->WritePSCfiles(0);
+      time(&stepstop);
+      printf("=== WritePSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+      gROOT->ProcessLine(Form(".!cp -fpdr %s/Det0000.root %s/iter/it/Det0000_fit%d.root",PSCPath.c_str(),PSCPath.c_str(),ifit));
+
+    }
+
+    gROOT->ProcessLine(Form(".!mv -f %s/iter/it %s/iter/it0",PSCPath.c_str(),PSCPath.c_str()));
+
+    
+    time(&stepstart);
+    agata->WritePSCfiles(-1);
     time(&stepstop);
     printf("=== WritePSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-    */
   }
-  
+
+
   time(&stop);
   printf("\n============ Elapsed time: %.1f seconds =============\n",difftime(stop,start));
 
-  if(kMakeInit || kGroupPulse) delete treereader;
+  if(kMakeInit || kFit) delete treereader;
   delete agata;
 
   return 0;

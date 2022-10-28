@@ -1,3 +1,5 @@
+// Pulse Shape basis to generate simulation data
+
 #ifndef PSBASIS_HH
 #define PABASIS_HH
 
@@ -14,16 +16,13 @@ class PSbasis { // input PSbasis
 
 public:
   PSbasis();
-  PSbasis(int detid);
   virtual ~PSbasis();
 
   void ReadPSbasis();
   Int_t GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD &spulse);
 
-  
+
 private:
-  int Detid = -1;
-  
   bool kextrapol = true;
 
   double range[NType][3][2];
@@ -52,7 +51,7 @@ private:
     v[m] = v[l];
     v[l] = temp;
   }
-
+  
 };
 
 #endif /* PSBASIS_HH  */

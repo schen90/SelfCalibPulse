@@ -10,26 +10,19 @@
 #include <TVector3.h>
 #include "TRandom.h"
 #include "TSystem.h"
+#include <iostream>
+#include <x86intrin.h>
 
 using namespace std;
 
 #define GB 1073741824. // size of 1GB 1024*1024*1024
 #define MaxMemoryUsage 100.
-#define NTHREADS 20
-#define NTHREADS2 50
+#define NTHREADS 50
 #define ONECLUST // make one cluster in tracking
-#define TRACKINGTREE // ouput tracking results
-//#define PSA // PSA to assign initial pos
-#define MINUIT2
+//#define NOISE 1000000
+//#define TRACKINGTREE // ouput tracking results
 //#define MULTISEG // include multi-segment events
-//#define CHECKTRACK // check track using OFT tacking
-//#define SINGLEHIT
-#define ADDPS // input G4Tree noPS, addPS from db
-#define NOISE 1000000
-#define PSCEMIN 0. // keV, PSC greate with PS Energy > PSCEMIN
-#define MINHITS 10    // min nhits for a good HC
-#define MAXHITS 5000  // max nhit for a HC
-#define SHORT
+//#define ADDPS // input G4Tree noPS, addPS from db
 
 // agata
 #define NType 3
@@ -44,17 +37,14 @@ using namespace std;
 #define NSig 56
 #define NSig_comp 56
 #define LOOP_SSE4_seg 14
-#define LOOP_SSE8_seg 7
 
-//#define SSE_M256
-#define CHI2        1
-#define CHI2_SQ     0
-#define CHI2_CHI2   1
-#define CHI2_CHI2_2 2
-#define CHI2_ABS    3
-#define CHI2_FABS   4
-#define CHI2_SQRT   5
-#define CHI2_2SQRT  6
+#define FIXED_METRIC_NONE   0
+#define FIXED_METRIC_ABSVAL 1
+#define FIXED_METRIC_SQUARE 2
+#define FIXED_METRIC_1SQRT  3
+#define FIXED_METRIC_2SQRT  4
+
+#define FIXED_METRIC FIXED_METRIC_ABSVAL
 
 #define PI 3.1415927
 #define rho_ge 5.32 /* g/cm3 */
@@ -79,21 +69,13 @@ struct PS{
   int   interid;  // interaction id in a event
   vector<float> hiteng; // hit energy
   float energy; // core energy
-
+  
   float labpos[3]; // lab position
   float detpos[3]; // det position
-
+  
   float opulse[NSegCore][NSig]; // original pulse shape
 };
 
 typedef struct PS PS;
-
-// structure for PSA basis
-struct PSAbasis{
-  float pos[3];                  // pos in det frame
-  float spulse[NSeg_comp][NSig]; // pulse shape for comparison
-};
-
-typedef struct PSAbasis PSAbasis;
 
 #endif // ifndef GLOBAL_HH

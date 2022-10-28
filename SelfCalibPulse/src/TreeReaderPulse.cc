@@ -20,31 +20,28 @@
 #include "AGATA.hh"
 #include "AGATAgeo.hh"
 #include "TreeReaderPulse.hh"
-#include "Tracker.hh"
 
 using namespace std;
 
-TreeReaderPulse::TreeReaderPulse(int detid){
+TreeReaderPulse::TreeReaderPulse(){
 
-  Detid = detid;
-  
 #ifdef ADDPS
-  apsb = new PSbasis(detid);
+  apsb = new PSbasis();
 #endif
 
 #ifdef NOISE
   LoadNoise();
 #endif
-  
+
   for(int i=0; i<NChain; i++){
     fChain[i] = new TChain();
   }
 
   ievt = 0;
+  cPaths = 0;
+  iter = 0;
   kcout = true;
-  kInterrupt = 0;
 }
-
 
 TreeReaderPulse::~TreeReaderPulse(){
 }
@@ -62,7 +59,7 @@ void TreeReaderPulse::Load(string configfile){
   float spos[3]; // source position mm
   string pathtmp;
   int run[2];
-  long long nevt;
+  int nevt;
   while(!fin.eof()){
     fin.getline(buffer,500);
     if(strncmp(buffer,"#input",6)==0){
@@ -87,22 +84,22 @@ void TreeReaderPulse::Load(string configfile){
     cerr<<"cannot find input from "<<configfile<<endl;
     return;
   }
-  
+
   cout<<"\e[1;33m find "<<nConfig<<" inputs:\e[0m"<<endl;
   for(int i=0; i<nConfig; i++){
     cout<<"#input "<<i<<": "
-	<<Form("source %.1fkeV at %.2f %.2f %.2f",
-	       fSourceE[i],
-	       fSourcePos[i].X(),fSourcePos[i].Y(),fSourcePos[i].Z())
-	<<endl;
+        <<Form("source %.1fkeV at %.2f %.2f %.2f",
+               fSourceE[i],
+               fSourcePos[i].X(),fSourcePos[i].Y(),fSourcePos[i].Z())
+        <<endl;
 
     for(int run=MinRun[i]; run<=MaxRun[i]; run++){
       fChain[0]->AddFile(Form("%s/G4SimData%04d.root",path[i].c_str(),run),0,"tree");
     }
 
-    long long nentries = fChain[0]->GetEntriesFast();
+    int nentries = fChain[0]->GetEntriesFast();
     cout<<" find \e[1m"<<nentries<<"\e[0m events from rootfiles "
-	<<Form("%s/G4SimData%04d ~ %04d",path[i].c_str(),MinRun[i],MaxRun[i])<<endl;
+        <<Form("%s/G4SimData%04d ~ %04d",path[i].c_str(),MinRun[i],MaxRun[i])<<endl;
 
     fChain[0]->Reset();
   }
@@ -117,402 +114,26 @@ void TreeReaderPulse::Load(string configfile){
   SourcePos= fSourcePos[0];
 }
 
-void TreeReaderPulse::ScanPS(AGATA *agata, long long nevts){
-  ScanPS(agata, nevts, -1);
-}
-
-void TreeReaderPulse::ScanPS(AGATA *agata, long long nevts, double Diff){
-  //fChain[0]->GetEntry(0);
-  //int tdet = obj[0].pdet->at(0);
-  //cout<<"compare pulse shape for det "<<tdet<<endl;
-
-  //int itype = tdet%3;
-
-  long long nentries = fChain[0]->GetEntriesFast();
-  cout<<"find "<<nentries<<" events from tree"<<endl;
-  irun = MinRun[0];
-  ievt = 0;
-  kInterrupt = 0;
-
-#ifndef NTHREADS
-  ScanPSLoop1(0, agata, nevts);
-
-#else
-  // loop trees with multi threads
-  thread th[NTHREADS];
-  cout<<"using "<<NTHREADS<<" threads:"<<endl;
-
-  for(int i=0; i<NTHREADS; i++){
-    th[i] = thread(&TreeReaderPulse::ScanPSLoop1, this, i, ref(agata), nevts);
-  }
-
-  for(int i=0; i<NTHREADS; i++){
-    if(th[i].joinable())
-      th[i].join();
-  }
-#endif
-  
-  cout<<"\r load "<<fPSs[0].size()<<"__"<<fPSs[1].size()<<"__"<<fPSs[2].size()<<" / "<<nevts<<" pulse shape"<<endl;
-  
-  sort(fPSs[0].begin(),fPSs[0].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
-  sort(fPSs[1].begin(),fPSs[1].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
-  sort(fPSs[2].begin(),fPSs[2].end(),[](const PS& lhs, const PS& rhs){return lhs.seg<rhs.seg;});
-
-  // output
-  TFile *fout = new TFile("ComparePS.root","RECREATE");
-
-  TTree *postree[3];
-  for(int itype=0; itype<3; itype++)
-    postree[itype] = new TTree(Form("postree%d",itype),Form("PS position tree of type%d",itype));
-
-  TTree *anatree[3];
-  for(int itype=0; itype<3; itype++)
-    anatree[itype] = new TTree(Form("tree%d",itype),Form("analyzed tree of type%d",itype));
-
-
-  
-#ifndef NTHREADS
-  for(int itype=0; itype<3; itype++)
-    ScanPSLoop2(0, postree[itype], anatree[itype], agata, nevts, Diff);
-
-#else
-  thread th2[NTHREADS];
-  cout<<"using "<<NTHREADS<<" threads:"<<endl;
-
-  for(int itype=0; itype<3; ){
-    for(int i=0; i<NTHREADS; i++){
-      if(itype<3)
-	th2[i] = thread(&TreeReaderPulse::ScanPSLoop2, this, itype, ref(postree[itype]), ref(anatree[itype]), ref(agata), nevts, Diff);
-      itype++;
-    }
-
-    for(int i=0; i<NTHREADS; i++){
-      if(th2[i].joinable())
-	th2[i].join();
-    }
-  }
-#endif
-  
-
-  fout->cd();
-  for(int itype=0; itype<3; itype++) postree[itype]->Write();
-  for(int itype=0; itype<3; itype++) anatree[itype]->Write();
-  fout->Close();
-
-  return;
-}
-
-void TreeReaderPulse::ScanPSLoop1(int iChain, AGATA *agata, long long nevts){
-  int run;
-  for(; irun<=MaxRun[0]; ){ // loop runs
-    if(kInterrupt) break;
-
-    {
-#ifdef NTHREADS
-      lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-      if(irun>MaxRun[0]) return;
-      run = irun;
-      irun++;
-    }
-
-    // initial tree
-    fChain[iChain]->Reset();
-    fChain[iChain]->AddFile(Form("%s/G4SimData%04d.root",path[0].c_str(),run),0,"tree");
-    int nentrytmp = fChain[iChain]->GetEntriesFast();
-    Init(iChain);
-
-    for(int ientry=0; ientry<nentrytmp; ientry++){ // loop evts
-      if(kInterrupt) break;
-
-      {
-#ifdef NTHREADS
-	lock_guard<mutex> lock(scanmtx); // lock scan
-#endif
-	if(ievt%10000==0) cout<<"\r load "<<fPSs[0].size()<<"__"<<fPSs[1].size()<<"__"<<fPSs[2].size()<<" / "<<nevts<<" pulse shape... ievt = "<<ievt<<flush;
-      }
-      
-      fChain[iChain]->GetEntry(ientry);
-      for(int idet=0; idet<obj[iChain].pdet->size(); idet++){
-	//if(obj[iChain].pdet->at(idet)!=tdet) continue;
-	int itype = obj[iChain].pdet->at(idet)%3;
-
-	int tmpnidx = -1, tmpnidxshift = 0;
-#ifdef NOISE
-	tmpnidx = (int)gRandom->Uniform(0,NOISE);
-	tmpnidxshift = (int)gRandom->Uniform(0,NOISE/(NSig*NSegCore));
-#endif
-	int segidx = -1;
-	PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift,false,segidx); // aps w/ PS
-	if(aps.det<0) continue;
-
-#ifdef SINGLEHIT
-	if(aps.nhits>1) continue;
-#endif
-	{
-#ifdef NTHREADS
-	  lock_guard<mutex> lock(scanmtx); // lock scan
-#endif
-	  if(fPSs[itype].size()<nevts) fPSs[itype].push_back(aps);
-	}
-      }
-
-      ievt++;
-
-      {
-#ifdef NTHREADS
-	lock_guard<mutex> lock(scanmtx); // lock scan
-#endif
-	if(fPSs[0].size()>=nevts && fPSs[1].size()>=nevts && fPSs[2].size()>=nevts){
-	  kInterrupt = 1;
-	  break;
-	}
-      }
-
-      
-    } // end of loop evts
-    
-  } // end of loop runs
-
-  return;  
-}
-
-
-void TreeReaderPulse::ScanPSLoop2(int itype, TTree *postree, TTree *anatree, AGATA *agata, long long nevts, double Diff){
-  AGATAgeo* agatageo = agata->GetGeo();
-
-  Int_t simseg;
-  Int_t nhits1, nhits2;
-  vector<float> hiteng1;
-  vector<float> hiteng2;
-  Float_t SimPos[3];
-  Float_t Phi, Radius, Z, PhiC, ZC;
-  Float_t PhiRZ1[3], PhiRZ2[3];
-  Float_t dist;
-  Float_t chi2;
-  Float_t chi2s[3];
-  Int_t nfired;
-  Float_t diffphi, diffr, diffz, rdiffphi;
-  Float_t Energy1, Energy2;
-  Float_t pulse1[NSegCore][NSig], pulse2[NSegCore][NSig], chis[NSegCore][NSig], zero[NSegCore][NSig];
-  for(int iseg=0; iseg<NSegCore; iseg++)
-    for(int isig=0; isig<NSig; isig++)
-      zero[iseg][isig] = 0;
-
-  postree->Branch("simseg", &simseg, "simseg/I");
-  postree->Branch("nhits", &nhits1, "nhits/I");
-  postree->Branch("SimPos", SimPos, "SimPos[3]/F");
-
-  anatree->Branch("type", &itype, "type/I");
-  anatree->Branch("simseg", &simseg, "simseg/I");
-  anatree->Branch("SimPos", SimPos, "SimPos[3]/F");
-  anatree->Branch("Phi", &Phi, "Phi/F");
-  anatree->Branch("Radius", &Radius, "Radius/F");
-  anatree->Branch("Z", &Z, "Z/F");
-  anatree->Branch("PhiC", &PhiC, "PhiC/F"); // phi relative to seg center
-  anatree->Branch("ZC", &ZC, "ZC/F"); // z relative to seg center
-  anatree->Branch("chi2", &chi2, "chi2/F");
-  anatree->Branch("chi2s", chi2s, "chi2s[3]/F");
-  anatree->Branch("nfired", &nfired, "nfired/I");
-
-  anatree->Branch("dist", &dist, "dist/F");
-  anatree->Branch("diffphi", &diffphi, "diffphi/F");
-  anatree->Branch("diffr", &diffr, "diffr/F");
-  anatree->Branch("diffz", &diffz, "diffz/F");
-  anatree->Branch("rdiffphi", &rdiffphi, "rdiffphi/F");
-
-  anatree->Branch("nhits1", &nhits1, "nhits1/I");
-  anatree->Branch("nhits2", &nhits2, "nhits2/I");
-  anatree->Branch("Energy1", &Energy1, "Energy1/F");
-  anatree->Branch("Energy2", &Energy2, "Energy2/F");
-  if(nevts<=1000){
-    anatree->Branch("hiteng1",&hiteng1);
-    anatree->Branch("hiteng2",&hiteng2);
-    anatree->Branch("PhiRZ1", PhiRZ1, "PhiRZ1[3]/F");
-    anatree->Branch("PhiRZ2", PhiRZ2, "PhiRZ2[3]/F");
-    anatree->Branch("pulse1", pulse1, Form("pulse1[%d][%d]/F",NSegCore,NSig));
-    anatree->Branch("pulse2", pulse2, Form("pulse2[%d][%d]/F",NSegCore,NSig));
-    anatree->Branch("chis", chis, Form("chis[%d][%d]/F",NSegCore,NSig));
-  }
-
-  cout<<"start compare..."<<endl;
-  float aspulse[NSig_comp], bspulse[NSig_comp];
-
-  int iievt;
-  for(iievt=0; iievt<fPSs[itype].size(); iievt++){
-    if(iievt%1000==0) cout<<"\r type "<<itype<<": finish "<<iievt<<" / "<<fPSs[itype].size()<<" pulse..."<<flush;
-
-    simseg = fPSs[itype][iievt].seg;
-    Energy1 = fPSs[itype][iievt].energy;
-
-    if(Energy1<PSCEMIN) continue;
-
-    nhits1 = fPSs[itype][iievt].nhits;
-    if(nevts<=1000){
-      hiteng1.clear();
-      for(int ii=0; ii<fPSs[itype][iievt].hiteng.size(); ii++) hiteng1.push_back(fPSs[itype][iievt].hiteng[ii]);
-    }
-
-    TMatrixD SegPos(3,1);
-    SegPos = agatageo->GetLocalSegPos(itype,simseg);
-    TVector3 segvec(SegPos(0,0),SegPos(1,0),0);
-    float SegPhi = segvec.Phi()/TMath::Pi()*180;
-    float SegR   = segvec.Mag();
-    float SegZ   = SegPos(2,0);
-
-    for(int ix=0; ix<3; ix++) SimPos[ix] = fPSs[itype][iievt].detpos[ix];
-    TVector3 ivec(fPSs[itype][iievt].detpos[0],fPSs[itype][iievt].detpos[1],0);
-    PhiRZ1[0] = ivec.Phi()/TMath::Pi()*180;
-    PhiRZ1[1] = ivec.Mag();
-    PhiRZ1[2] = fPSs[itype][iievt].detpos[2];
-
-    Phi    = PhiRZ1[0];    
-    Radius = PhiRZ1[1];    
-    Z      = PhiRZ1[2];
-    PhiC   = Phi - SegPhi; if(PhiC>180) PhiC-=360; if(PhiC<-180) PhiC+=360;
-    ZC     = Z - SegZ;
-    postree->Fill();
-
-    int fseg[NSeg_comp]; //0,1:fired seg, core; 2,3:next sectors; 4,5:next slice
-    agatageo->GetNextSegs(simseg, fseg);
-
-    for(int jevt = iievt+1; jevt<fPSs[itype].size(); jevt++){
-      if(simseg!=fPSs[itype][jevt].seg) break;
-
-      Energy2 = fPSs[itype][jevt].energy;
-      nhits2 = fPSs[itype][jevt].nhits;
-      if(nevts<=1000){
-	hiteng2.clear();
-	for(int jj=0; jj<fPSs[itype][jevt].hiteng.size(); jj++) hiteng2.push_back(fPSs[itype][jevt].hiteng[jj]);
-      }
-
-
-      dist = 0;
-      for(int ix=0; ix<3; ix++) dist += pow(fPSs[itype][iievt].detpos[ix]-fPSs[itype][jevt].detpos[ix],2);
-      dist = sqrt(dist);
-
-      TVector3 jvec(fPSs[itype][jevt].detpos[0],fPSs[itype][jevt].detpos[1],0);
-      PhiRZ2[0] = jvec.Phi()/TMath::Pi()*180;
-      PhiRZ2[1] = jvec.Mag();
-      PhiRZ2[2] = fPSs[itype][jevt].detpos[2];
-
-      diffphi = PhiRZ1[0] - PhiRZ2[0];
-      if(diffphi>180)  diffphi-=360;
-      if(diffphi<-180) diffphi+=360;
-      diffphi = fabs(diffphi);
-      rdiffphi = (PhiRZ1[1]+PhiRZ2[1])/2*diffphi/180*TMath::Pi();
-      diffr = fabs(PhiRZ1[1] - PhiRZ2[1]);
-      diffz = fabs(PhiRZ1[2] - PhiRZ2[2]);
-
-      if(Diff>0){
-	double difflimit = 0.3;
-	int ndiff = 0;
-	if(diffr>difflimit) ndiff++;
-	if(diffz>difflimit) ndiff++;
-	if(rdiffphi>difflimit) ndiff++;
-	if(ndiff!=1) continue; // select data diff only in one dimension
-
-	ndiff = 0;
-	if(fabs(diffr-Diff)<0.2) ndiff++;
-	if(fabs(diffz-Diff)<0.2) ndiff++;
-	if(fabs(rdiffphi-Diff)<0.2) ndiff++;
-	if(ndiff!=1) continue; // select data only match Diff
-      }
-
-      
-      nfired=0;
-      chi2 = 0;
-      for(int ix=0; ix<3; ix++) chi2s[ix]=0;
-      int uflg[NSegCore]; for(int iseg=0; iseg<NSegCore; iseg++) uflg[iseg]=0;
-
-      for(int ix=0; ix<3; ix++){
-	for(int ii=0; ii<2; ii++){
-	  int iseg = fseg[2*ix+ii];
-	  if(uflg[iseg]!=0) continue;
-	  if(nevts<=1000){
-	    copy_n(fPSs[itype][iievt].opulse[iseg], NSig, pulse1[iseg]);
-	    copy_n(fPSs[itype][jevt].opulse[iseg], NSig, pulse2[iseg]);
-	    copy_n(zero[iseg], NSig, chis[iseg]);
-	  }
-
-	  copy_n(fPSs[itype][iievt].opulse[iseg], NSig_comp, aspulse);
-	  copy_n(fPSs[itype][jevt].opulse[iseg], NSig_comp, bspulse);
-
-	  if(nevts<=1000){
-	    for(int isig=0; isig<NSig_comp; isig++){
-	      chis[iseg][isig] = pow(aspulse[isig]-bspulse[isig],2); //SQ
-	      float sigm = fabs(bspulse[isig]); if(sigm<0.01) sigm=0.01;
-	      chis[iseg][isig] = chis[iseg][isig]/sigm; //chi2
-	    }
-	  }
-	  
-	  float tmpchi2 = agata->Chi2seg(aspulse, bspulse);
-	  chi2 += tmpchi2;
-	  chi2s[ix] += tmpchi2; // sum
-	  nfired++;
-
-	  uflg[iseg]=1;
-	}
-      }
-
-      // compare other segments
-      for(int iseg=0; iseg<NSegCore; iseg++){
-	if(uflg[iseg]!=0) continue;
-	if(nevts<=1000){
-	  copy_n(fPSs[itype][iievt].opulse[iseg], NSig, pulse1[iseg]);
-	  copy_n(fPSs[itype][jevt].opulse[iseg], NSig, pulse2[iseg]);
-	  copy_n(zero[iseg], NSig, chis[iseg]);
-	}
-
-	copy_n(fPSs[itype][iievt].opulse[iseg], NSig_comp, aspulse);
-	copy_n(fPSs[itype][jevt].opulse[iseg], NSig_comp, bspulse);
-
-	if(nevts<=1000){
-	  for(int isig=0; isig<NSig_comp; isig++){
-	    chis[iseg][isig] = pow(aspulse[isig]-bspulse[isig],2); //SQ
-	    float sigm = fabs(bspulse[isig]); if(sigm<0.01) sigm=0.01;
-	    chis[iseg][isig] = chis[iseg][isig]/sigm; //chi2
-	  }
-	}
-
-	float tmpchi2 = agata->Chi2seg(aspulse, bspulse);
-	//tmpchi2 = fPSs[itype][iievt].segwgt[iseg]>0? tmpchi2*fPSs[itype][iievt].segwgt[iseg] : tmpchi2*fPSs[itype][jevt].segwgt[iseg];
-	//if(tmpchi2>chi2) chi2=tmpchi2; // maximum
-	chi2 += tmpchi2; // sum
-	nfired++;
-
-	uflg[iseg]=1;
-      }
-      //if(nfired>0) chi2 = chi2/nfired;
-
-      anatree->Fill();
-    }
-    
-  }
-  cout<<"\r type "<<itype<<": finish "<<iievt<<" / "<<fPSs[itype].size()<<" pulse..."<<endl;
-  
-  return;
-}
-
 
 void TreeReaderPulse::MakeInit(){
   cout<<"Make folders for SelfCalib..."<<endl;
   gROOT->ProcessLine(".!rm -rf ./share/*");
   gROOT->ProcessLine(".!mkdir ./share/Hits");
-  gROOT->ProcessLine(".!mkdir ./share/HCs");
-  //gROOT->ProcessLine(".!mkdir ./share/PSCs");
 
   for(int i=0; i<nConfig; i++){
     gROOT->ProcessLine(Form(".!mkdir ./share/Hits/input%d",i));
+    gROOT->ProcessLine(Form(".!mkdir ./share/Hits/input%d/tmp",i));
+    gROOT->ProcessLine(Form(".!mkdir ./share/Hits/input%d/it",i));
   }
 
+#ifdef NOISE
   MakeNoise();
+#endif
   return;
 }
 
 
 void TreeReaderPulse::MakeNoise(){
-
 #ifdef NOISE
   cout<<"AddNoise: create noise base size "<<NOISE<<endl;
   // get random noise
@@ -542,7 +163,7 @@ void TreeReaderPulse::MakeNoise(){
   fnoise.close();
 #endif
 
-  return;
+  return;  
 }
 
 
@@ -550,12 +171,12 @@ void TreeReaderPulse::LoadNoise(){
 
 #ifdef NOISE
   if(gSystem->AccessPathName("./share/NoiseBase.txt")) MakeNoise();
-  
+
   ifstream fnoise("./share/NoiseBase.txt");
   for(int i=0; i<NOISE; i++) fnoise>>noise[i];
   fnoise.close();
 #endif
-  
+
   return;
 }
 
@@ -580,29 +201,47 @@ void TreeReaderPulse::Init(int i){
   fChain[i]->SetBranchAddress("ngrid",&obj[i].ngrid);
 
 #ifndef ADDPS
-  if(kWithPS){
-    //fChain[i]->SetBranchAddress("extrpl",&obj[i].extrpl);
-    fChain[i]->SetBranchAddress("core",&obj[i].core);
-    fChain[i]->SetBranchAddress("spulse",&obj[i].spulse);
-  }
+  fChain[i]->SetBranchAddress("core",&obj[i].core);
+  fChain[i]->SetBranchAddress("spulse",&obj[i].spulse);
 #endif
-  
+
   fChain[i]->SetBranchAddress("category",&obj[i].category);
 
   return;
 }
 
 
-// loop opt=0: generate initial PSC; opt=1: findmaxdev; opt=2: dividepsc
-void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata){
-  if     (opt==0) cout<<"\e[1;31m Generate initial PSC ... \e[0m"<<endl;
-  else if(opt==1) cout<<"\e[1;31m Find Max Deviation ... \e[0m"<<endl;
-  else if(opt==2) cout<<"\e[1;31m Divide PSC ... \e[0m"<<endl;
+void TreeReaderPulse::InitEvtTree(int i){
+  if (i<0 || i>=NChain) return;
 
-  if(opt>0){
-    cNotMatch  = 0;
-  }
+  // set branch
+  //EvtTree[i]->Branch("iconfig",&evtobj[i].iconfig);
+  //EvtTree[i]->Branch("irun",&evtobj[i].irun);
+  EvtTree[i]->Branch("ientry",&evtobj[i].ientry);
+  EvtTree[i]->Branch("nhits",&evtobj[i].nhits);
 
+  EvtTree[i]->Branch("interid",&evtobj[i].interid);
+  EvtTree[i]->Branch("idet",&evtobj[i].idet);
+  EvtTree[i]->Branch("iseg",&evtobj[i].iseg);
+  EvtTree[i]->Branch("depE",&evtobj[i].depE);
+  EvtTree[i]->Branch("labpos",evtobj[i].labpos,"labpos[3]/F");
+  EvtTree[i]->Branch("calpos",evtobj[i].calpos,"calpos[3]/F");
+  EvtTree[i]->Branch("dist",&evtobj[i].dist);
+#ifdef NOISE
+  EvtTree[i]->Branch("noiseidx",&evtobj[i].noiseidx);
+  EvtTree[i]->Branch("noiseidxshift",&evtobj[i].noiseidxshift);
+#endif
+  EvtTree[i]->Branch("sourcepos",evtobj[i].sourcepos,"sourcepos[3]/F");
+  EvtTree[i]->Branch("sourceeng",&evtobj[i].sourceeng);
+
+  return;
+}
+
+
+void TreeReaderPulse::GeneratePSC(AGATA *agata){
+  cout<<"\e[1;31m Generate PSC ... \e[0m"<<endl;
+
+  cPaths = 0;
   if(nConfig<1){
     cerr<<"cannot find input, check configure file..."<<endl;
     return;
@@ -612,57 +251,24 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata){
     cout<<"\e[1;32m"<<" #input "<<i<<"\e[0m"<<endl;
     SourceE = fSourceE[i];
     SourcePos = fSourcePos[i];
-    GenerateHCs(opt, agata, Nevts[i], i);
+    GeneratePSC( agata, i, Nevts[i]);
   }
 
-  
-#ifdef NTHREADS
-  if(opt==0){
-    //sort EventHits
-    cout<<endl<<"\r sort fEventHits..."<<flush;
-    time(&start);
-    agata->SortEventHits();
-    time(&stop);
-    cout<<Form("\r sort fEventHits..%.0fs",difftime(stop,start))<<endl;
-  }
-#endif
-  
+  iter++;
+  return;
 }
 
 
-void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts){
-  if(opt>0){
-    cNotMatch  = 0;
-  }
+void TreeReaderPulse::GeneratePSC(AGATA *agata, int nevts){
 
-  GenerateHCs(opt, agata, nevts, 0);
-
-  
-#ifdef NTHREADS
-  if(opt==0){
-    //sort EventHits
-    cout<<endl<<"\r sort fEventHits..."<<flush;
-    time(&start);
-    agata->SortEventHits();
-    time(&stop);
-    cout<<Form("\r sort fEventHits..%.0fs",difftime(stop,start))<<endl;
-  }
-#endif
-  
+  cPaths = 0;
+  GeneratePSC( agata, 0, nevts);
+  return;
 }
 
 
-void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int iconfig){
+void TreeReaderPulse::GeneratePSC(AGATA *agata, int iconfig, int nevts){
 
-  if(opt==1){
-    MaxDev = 0;
-  }
-  if(opt==2){
-    cDivPS = 0;
-    maxnhitsdiv = 0;
-    agata->SetMaxNDiv(0);
-  }
-  
   // statistics in total
   fChain[0]->Reset();
   for(int run=MinRun[iconfig]; run<=MaxRun[iconfig]; run++){
@@ -670,7 +276,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
   }
   Init(0);
 
-  long long nentries = fChain[0]->GetEntriesFast();
+  int nentries = fChain[0]->GetEntriesFast();
   if(nevts>0) nentries = TMath::Min(nentries,nevts);
   irun = MinRun[iconfig];
   ievt = 0;
@@ -679,15 +285,15 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 
   // Loop entries-------------------------------------------
 #ifndef NTHREADS
-  GenerateHCsLoop(opt, iconfig, 0, agata, nentries);
+  GeneratePSCLoop( 0, agata, iconfig, nentries);
 
 #else
   // loop trees with multi threads
   thread th[NTHREADS];
   cout<<"using "<<NTHREADS<<" threads:"<<endl;
-  
+
   for(int i=0; i<NTHREADS; i++){
-    th[i] = thread(&TreeReaderPulse::GenerateHCsLoop, this, opt, iconfig, i, ref(agata),nentries);
+    th[i] = thread(&TreeReaderPulse::GeneratePSCLoop, this, i, ref(agata), iconfig, nentries);
   }
 
   for(int i=0; i<NTHREADS; i++){
@@ -698,59 +304,33 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 #endif
 
   // output final statistics
-  NEventHits = agata->GetEventHitsSize();
-  
   time(&stop);
-  long long PSCstat[10];
+  int PSCstat[10];
   agata->GetPSCstat(PSCstat);
   double MemUsageGB = GetCurrentMemoryUsage()/GB;
   double MemTotalGB = GetTotalSystemMemory()/GB;
   double MemUsage = MemUsageGB / MemTotalGB * 100;
 
-
-  if(opt==0){ // initial PSC
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	<<Form("(%.0fs/10kevts)..",difftime(stop,start))
-	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
-	<<"PS-"<<PSCstat[0]
-	<<" PSC-"<<PSCstat[1]
-	<<" maxnhits-"<<PSCstat[4]<<".."
-	<<"fEventHits-"<<NEventHits<<endl;
-
-  }else if(opt==1){ // find max dev
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	<<Form("(%.0fs/10kevts)..",difftime(stop,start))
-	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
-	<<"PS-"<<PSCstat[0]
-	<<" PSC-"<<PSCstat[1]
-	<<" maxnhits-"<<PSCstat[4]<<".."
-	<<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<endl;
-
-  }else if(opt==2){ // divide PSC
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	<<Form("(%.0fs/10kevts)..",difftime(stop,start))
-	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
-	<<"PS-"<<PSCstat[0]
-	<<" PSC-"<<PSCstat[1]
-	<<" DivPS-"<<cDivPS<<" NotMatch-"<<cNotMatch<<".."
-	<<" maxnhitsdiv-"<<maxnhitsdiv
-	<<" maxndiv-"<<PSCstat[8]<<endl;
-  }
-
+  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+      <<Form("(%.0fs/10kevts)..",difftime(stop,start))
+      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+      <<" PSC-"<<PSCstat[0]
+      <<" Path-"<<cPaths
+      <<" maxnhits-"<<PSCstat[2]<<endl;
+  
   return;
 }
 
 
-// loop opt=0: generate initial PSC; opt=1: findmaxdev; opt=2: dividepsc
-void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *agata, long long nentries){
-  
-  long long PSCstat[10];
+void TreeReaderPulse::GeneratePSCLoop(int iChain, AGATA *agata,
+				      int iconfig, int nentries){
+
+  int PSCstat[10];
   time(&start);
 
-  long long istart = 0;
+  int istart = 0;
   int run;
   for(; irun<=MaxRun[iconfig]; ){ //loop runs
-    if(kInterrupt) break;
 
     {
 #ifdef NTHREADS
@@ -767,82 +347,59 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
     int nentrytmp = fChain[iChain]->GetEntriesFast();
     Init(iChain);
 
+    // write to EvtTree
+    EvtFile[iChain] = new TFile(Form("./share/Hits/input%d/tmp/run%04d.root",iconfig,run),"RECREATE");
+    EvtTree[iChain] = new TTree("tree","EventHits");
+    InitEvtTree(iChain);
     
     for(int ientry=0; ientry<nentrytmp; ientry++){ //loop evts
-      if(kInterrupt) break;
-    
+
       // output state
       if(ievt%10000==0 && kcout){
-	kcout = false;      
-	time(&stop);
+        kcout = false;
+        time(&stop);
 
 #ifdef NTHREADS
-	lock_guard<mutex> lock(treemtx); // lock tree read
+        lock_guard<mutex> lock(treemtx); // lock tree read
 #endif
-	agata->GetPSCstat(PSCstat);
-	if(PSCstat[1]>1000000){
-	  //agata->SetAddNewPSC(false);
-	  cout<<endl<<"PSC-"<<PSCstat[1]<<" : remove small PSC"<<endl;
-	  agata->RemoveSmallPSC(5);
-	}
+        agata->GetPSCstat(PSCstat);
+        double MemUsageGB = GetCurrentMemoryUsage()/GB;
+        double MemTotalGB = GetTotalSystemMemory()/GB;
+        double MemUsage = MemUsageGB / MemTotalGB * 100;
 
-	double MemUsageGB = GetCurrentMemoryUsage()/GB;
-	double MemTotalGB = GetTotalSystemMemory()/GB;
-	double MemUsage = MemUsageGB / MemTotalGB * 100;
-
-	if(opt==0){ // initial PSC
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	      <<Form("(%.0fs/10kevts)..",difftime(stop,start))
-	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
-	      <<"PS-"<<PSCstat[0]
-	      <<" PSC-"<<PSCstat[1]
-	      <<" maxnhits-"<<PSCstat[4]<<flush;
-
-	}else if(opt==1){ // find max dev
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	      <<Form("(%.0fs/10kevts)..",difftime(stop,start))
-	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
-	      <<"PS-"<<PSCstat[0]
-	      <<" PSC-"<<PSCstat[1]
-	      <<" maxnhits-"<<PSCstat[4]<<".."
-	      <<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<flush;
-
-	}else if(opt==2){ // divide PSC
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	      <<Form("(%.0fs/10kevts)..",difftime(stop,start))
-	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
-	      <<"PS-"<<PSCstat[0]
-	      <<" PSC-"<<PSCstat[1]
-	      <<" DivPS-"<<cDivPS<<" NotMatch-"<<cNotMatch<<".."
-	      <<" maxnhitsdiv-"<<maxnhitsdiv
-	      <<" maxndiv-"<<PSCstat[8]<<flush;
-	}
-      
-	if(MemUsage>MaxMemUsage){
-	  cout<<endl<<"exceed memory limit. Write to PSCfiles..."<<endl;
-	  kInterrupt = 1;
-	  break;
-	}
+	cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	    <<Form("(%.0fs/10kevts)..",difftime(stop,start))
+	    <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	    <<" PSC-"<<PSCstat[0]
+	    <<" Path-"<<cPaths
+	    <<" maxnhits-"<<PSCstat[2]<<flush;
 
 	time(&start);
-	kcout = true;
+        kcout = true;
       }
 
-      // work on entry
-      if     (opt==0) GenerateHCsworker(iconfig, run, iChain, agata, ientry, nentries);
-      else if(opt==1) FindMaxDevworker( iconfig, run, iChain, agata, ientry, nentries, istart);
-      else if(opt==2) UpdateHCsworker(  iconfig, run, iChain, agata, ientry, nentries, istart);
-
+      // process one event
+      ProcessOneEvent( iChain, agata, iconfig, run, ientry, nentries);
+      
     }//end of loop evts
 
+    EvtFile[iChain]->cd();
+    EvtTree[iChain]->Write();
+    EvtFile[iChain]->Close();
+    gROOT->ProcessLine(Form(".!mv -f ./share/Hits/input%d/tmp/run%04d.root ./share/Hits/input%d/run%04d.root",iconfig,run,iconfig,run));
+
+    if(run==0){
+      gROOT->ProcessLine(Form(".!cp -pdr ./share/Hits/input%d/run%04d.root ./share/Hits/input%d/it/run%04d_Fit%d.root",iconfig,run,iconfig,run,iter));
+    }
   }//end of loop runs
-  
+
   return;
 }
 
 
-void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
-					int ientry, long long nentries){
+void TreeReaderPulse::ProcessOneEvent(int iChain, AGATA *agata,
+				      int iconfig, int run,
+				      int ientry, int nentries){
 
   // get entry-------------------------------------------------------------
   {
@@ -850,7 +407,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
     lock_guard<mutex> lock(treemtx); // lock tree read
 #endif
     if(ievt>=nentries) return;
-    if(ientry>=nentries) return;  
+    if(ientry>=nentries) return;
 
     ievt++;
   }
@@ -864,8 +421,6 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
   for(int idet=0; idet<obj[iChain].pdet->size(); idet++){ //loop dets
     int detid = obj[iChain].pdet->at(idet);
 
-    if(Detid>-1 && detid!=Detid) continue; // get PS for selected Detid
-
     int tmpnidx = -1, tmpnidxshift = 0;
 #ifdef NOISE
     tmpnidx = (int)gRandom->Uniform(0,NOISE);
@@ -873,22 +428,22 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 #endif
     int segidx = -1;
     PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift,false,segidx); // aps w/ PS
-
+    
     if(aps.det<0 && segidx>-1){ // multi-segment fired
 #ifdef MULTISEG
       for(int idx=0; idx<segidx; idx++){
-	PS aps = GetAPS(iChain,agata,idet,-1,0,true,idx); // aps w/o PS
+        PS aps = GetAPS(iChain,agata,idet,-1,0,true,idx); // aps w/o PS
         if(aps.det<0) continue;
 #ifdef SINGLEHIT
-	if(aps.nhits>1) continue;
+        if(aps.nhits>1) continue;
 #endif
-	fPS.push_back(aps);
-	fSegIdx.push_back(idx);
-	Nidx.push_back(-1);
-	Nidxshift.push_back(0);
+        fPS.push_back(aps);
+        fSegIdx.push_back(idx);
+        Nidx.push_back(-1);
+        Nidxshift.push_back(0);
       }
 #endif
-      
+
     }else{ // one segment fired
       if(aps.det<0) continue;
 #ifdef SINGLEHIT
@@ -902,45 +457,6 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 
   }//end of loop dets
 
-  
-  if(fPS.size()==0) return; // skip if selected Det not fired
-
-  if(Detid>-1){ // one det mode
-    // get other PSs in one event-----------------------------------
-    for(int idet=0; idet<obj[iChain].pdet->size(); idet++){ //loop dets
-      int detid = obj[iChain].pdet->at(idet);
-
-      if(Detid>-1 && detid==Detid) continue; // get PS for other Dets
-
-      int segidx = -1;
-      PS aps = GetAPS(iChain,agata,idet,-1,0,true,segidx); // aps w/o PS
-
-      if(aps.det<0 && segidx>-1){ // multi-segment fired
-#ifdef MULTISEG
-	for(int idx=0; idx<segidx; idx++){
-	  PS aps = GetAPS(iChain,agata,idet,-1,0,true,idx); // aps w/o PS
-	  if(aps.det<0) continue;
-#ifdef SINGLEHIT
-	  if(aps.nhits>1) continue;
-#endif
-	  fPS.push_back(aps);
-	  fSegIdx.push_back(idx);
-	}
-#endif
-	
-      }else{ // one segment fired
-        if(aps.det<0) continue;
-#ifdef SINGLEHIT
-	if(aps.nhits>1) continue;
-#endif
-	fPS.push_back(aps);
-	fSegIdx.push_back(segidx);
-
-      }
-
-    }//end of loop dets
-  }
-
   if(fPS.size()<2) return; // at least one Compton scattering
 
   // create Hit-----------------------------------------------
@@ -949,239 +465,100 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
   fEvent->SetIdx(iconfig,run,ientry);
 
   for(int i=0; i<fPS.size(); i++){ //loop fPS
-
-    TVector3 hitpos(fPS[i].labpos[0],fPS[i].labpos[1],fPS[i].labpos[2]);
-    TVector3 initpos;
-    if(Detid<0 || fPS[i].det==Detid){
-      initpos = agata->GetPSpos(fPS[i].det, fPS[i].seg, &fPS[i]);
-    }else{
-      TMatrixD SegPos = agata->GetGeo()->GetSegPos(fPS[i].det,fPS[i].seg);
-      initpos.SetXYZ(SegPos(0,0), SegPos(1,0), SegPos(2,0));
-    }
     
+    TVector3 hitpos(fPS[i].labpos[0],fPS[i].labpos[1],fPS[i].labpos[2]);
+    TVector3 initpos = agata->GetPSpos(fPS[i].det, fPS[i].seg, &fPS[i]); // initpos from PSA
+
     Hit *ahit = new Hit(fPS[i].det, fPS[i].seg, fPS[i].energy, hitpos, initpos); //keV and mm
     ahit->SetInterid(fPS[i].interid);
-    if(Detid<0 || fPS[i].det==Detid){
 #ifdef NOISE
-      ahit->SetNoiseIdx(Nidx[i]);
-      ahit->SetNoiseIdxShift(Nidxshift[i]);
+    ahit->SetNoiseIdx(Nidx[i]);
+    ahit->SetNoiseIdxShift(Nidxshift[i]);
 #endif
-    }
-    
+
     fEvent->Add(ahit);
     uflag.push_back(1);
   }
 
-  long long iEvtHit = agata->AddEventHits(fEvent);
   vector<Hit*>* fHits = fEvent->GetfHits();
-  
-#ifdef CHECKTRACK
-  // check track----------------------------------------------
-  Tracker tracker(fHits, (Double_t)SourceE, SourcePos);
-  tracker.OFTtracking();
-  vector<int> atrack = tracker.GetTrack();
-  for(int i=0; i<fPS.size(); i++) uflag[i] = 0;
-  if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
-#endif
-  
-  // group PS-------------------------------------------------
-  for(int i=0; i<fPS.size(); i++){ //loop fPS
 
-    if(Detid>-1 && fPS[i].det!=Detid) continue; // one det mode
-    if(fSegIdx[i]>-1) continue; // multi segment fired
-    if(uflag[i]!=1) continue;
-
-    int tmp = agata->AddPS(&fPS[i], fHits->at(i)); // add to pulse shape collection
-  }//end of loop fPS
-  
-  return;
-
-}
-
-
-void TreeReaderPulse::FindMaxDevworker(int iconfig, int run, int iChain, AGATA *agata,
-				       int ientry, long long nentries, long long &istart){
-
-  if(ievt>=nentries) return;
-  
-  // find Hit-----------------------------------------------
-  long long iEvtHit = agata->FindiEvtHit(iconfig, run, ientry, istart);
-  if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return;}
-
-  vector<Hit*>* fHits = agata->FindEventHits(iEvtHit)->GetfHits();
-  istart = iEvtHit;
-
-  bool kFindPS = false;
-  // check if need to compare hits with HCs
+  // write EventHits -----------------------------------------
+  evtobj[iChain].iconfig = iconfig;
+  evtobj[iChain].irun = run;
+  evtobj[iChain].ientry = ientry;
+  evtobj[iChain].nhits = fHits->size();
+  evtobj[iChain].sourcepos[0] = SourcePos.X();
+  evtobj[iChain].sourcepos[1] = SourcePos.Y();
+  evtobj[iChain].sourcepos[2] = SourcePos.Z();
+  evtobj[iChain].sourceeng = SourceE;
   for(int i=0; i<fHits->size(); i++){
-
-    if(Detid>-1 && fHits->at(i)->GetDet()!=Detid) continue; // selected Detid
-
-    kFindPS = true;
-    if(kFindPS) break;
-  }
-  
-  if(!kFindPS){ ievt++; return;}
-
-  // find corresponding fPS
-  vector<PS> fPS;
-  {
-#ifdef NTHREADS
-    lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-    if(ievt>=nentries) return;
-    if(ientry>=nentries) return;  
-
-    ievt++;
-  }
-  fChain[iChain]->GetEntry(ientry);
-
-  int ihit = 0;
-  for(int idet=0; idet<obj[iChain].pdet->size(); idet++){ //loop dets
-    int detid = obj[iChain].pdet->at(idet);
-
-    if(Detid>-1 && detid!=Detid) continue; // get PS for selected Detid
-    
-    int tmpnidx = -1, tmpnidxshift=0;
+    evtobj[iChain].interid = i;
+    evtobj[iChain].idet = fHits->at(i)->GetDet();
+    evtobj[iChain].iseg = fHits->at(i)->GetSeg();
+    evtobj[iChain].depE = fHits->at(i)->GetE();
+    TVector3 LabPos = fHits->at(i)->GetRealPosition();
+    TVector3 CalPos = fHits->at(i)->GetPosition();
+    evtobj[iChain].labpos[0] = LabPos.X();  evtobj[iChain].calpos[0] = CalPos.X();
+    evtobj[iChain].labpos[1] = LabPos.Y();  evtobj[iChain].calpos[1] = CalPos.Y();
+    evtobj[iChain].labpos[2] = LabPos.Z();  evtobj[iChain].calpos[2] = CalPos.Z();
+    evtobj[iChain].dist = (LabPos - CalPos).Mag();
 #ifdef NOISE
-    if(ihit >= fHits->size()) ihit=fHits->size()-1;
-    tmpnidx = fHits->at(ihit)->GetNoiseIdx();
-    tmpnidxshift = fHits->at(ihit)->GetNoiseIdxShift();
+    evtobj[iChain].noiseidx = fHits->at(i)->GetNoiseIdx();
+    evtobj[iChain].noiseidxshift = fHits->at(i)->GetNoiseIdxShift();
 #endif
-    PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift); // aps w/ PS
-    if(aps.det<0) return;
-#ifdef SINGLEHIT
-    if(aps.nhits>1) continue;
-#endif
-    fPS.push_back(aps);
-    ihit++;
-  }//end of loop dets
-  
-  // check fPS match with fHits
-  cNotMatch++;
-  if(Detid<0 && fHits->size()!=fPS.size()) return;
-  for(int i=0; i<fPS.size(); i++){
-    if(fHits->at(i)->GetDet()!=fPS[i].det || fHits->at(i)->GetSeg()!=fPS[i].seg) return;
-    if(fHits->at(i)->GetE()!=fPS[i].energy) return;
-
-    TVector3 hitpos(fPS[i].labpos[0],fPS[i].labpos[1],fPS[i].labpos[2]);
-    if(fHits->at(i)->GetRealPosition()!=hitpos) return;
+    EvtTree[iChain]->Fill();
   }
-  cNotMatch--;
-
-  // check PSCs-------------------------------------------------
-  for(int i=0; i<fPS.size(); i++){ //loop fPS
-    
-    float tmpdev = agata->FindMaxDev(&fPS[i], fHits->at(i)); // find max deviation
-
-    if(tmpdev>MaxDev) MaxDev = tmpdev;    
-  }//end of loop fPS
-
-  return;
-
-}
-
-
-void TreeReaderPulse::UpdateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
-				      int ientry, long long nentries, long long &istart){
-
-  if(ievt>=nentries) return;
   
-  // find Hit-----------------------------------------------
-  long long iEvtHit = agata->FindiEvtHit(iconfig, run, ientry, istart);
-  if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return;}
-
-  vector<Hit*>* fHits = agata->FindEventHits(iEvtHit)->GetfHits();
-  vector<int> uflag;
-  for(int i=0; i<fHits->size(); i++){ //loop fPS
-    uflag.push_back(1);
-  }
-  istart = iEvtHit;
-
-#ifdef CHECKTRACK
-  // check track----------------------------------------------
+  // tracking ----------------------------------------------
   Tracker tracker(fHits, (Double_t)SourceE, SourcePos);
-  tracker.OFTtracking();
+  //tracker.OFTtracking();
+  tracker.Simpletracking();
   vector<int> atrack = tracker.GetTrack();
-  for(int i=0; i<fHits->size(); i++) uflag[i] = 0;
-  if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
-#endif
-  
-  bool kFindPS = false;
-  // check if need to compare hits with HCs
-  for(int i=0; i<fHits->size(); i++){
 
-    if(Detid>-1 && fHits->at(i)->GetDet()!=Detid) continue; // selected Detid
+  // fit paths
+  if(atrack.size()>1){ // at least two hits
+    double incE = SourceE;
+    double depE = fHits->at(atrack[0])->GetE(); // keV
 
-    vector<HitCollection*>* hcs = fHits->at(i)->GetHitCollections();
-    for(HitCollection* ahc : *hcs){
-      if(ahc->GetSize() > MAXHITS) kFindPS = true;
-      if(kFindPS) break;
+    Hit *sourcehit = new Hit(SourcePos);
+    sourcehit->SetInterid(-1);
+
+    // first scattering
+    Path *apath = new Path(sourcehit,fHits->at(atrack[0]),fHits->at(atrack[1]),
+			   incE, depE, incE, depE);
+    int ipoint = agata->FitPath(apath);
+    if(ipoint>-1){
+      agata->AddPStoPSC(&fPS[atrack[0]], ipoint);
+      cPaths++;
     }
-    if(kFindPS) break;
-  }
-  
-  if(!kFindPS){ ievt++; return;}
 
-  // find corresponding fPS
-  vector<PS> fPS;
-  {
-#ifdef NTHREADS
-    lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-    if(ievt>=nentries) return;
-    if(ientry>=nentries) return;  
-
-    ievt++;
-  }
-  fChain[iChain]->GetEntry(ientry);
-
-  int ihit = 0;
-  for(int idet=0; idet<obj[iChain].pdet->size(); idet++){ //loop dets
-    int detid = obj[iChain].pdet->at(idet);
-
-    if(Detid>-1 && detid!=Detid) continue; // get PS for selected Detid
+    delete apath;
+    delete sourcehit;
     
-    int tmpnidx = -1, tmpnidxshift=0;
-#ifdef NOISE
-    if(ihit >= fHits->size()) ihit=fHits->size()-1;
-    tmpnidx = fHits->at(ihit)->GetNoiseIdx();
-    tmpnidxshift = fHits->at(ihit)->GetNoiseIdxShift();
-#endif
-    PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift); // aps w/ PS
-    if(aps.det<0) return;
-#ifdef SINGLEHIT
-    if(aps.nhits>1) continue;
-#endif
-    fPS.push_back(aps);
-    ihit++;
-  }//end of loop dets
-  
-  // check fPS match with fHits
-  cNotMatch++;
-  if(Detid<0 && fHits->size()!=fPS.size()) return;
-  for(int i=0; i<fPS.size(); i++){
-    if(fHits->at(i)->GetDet()!=fPS[i].det || fHits->at(i)->GetSeg()!=fPS[i].seg) return;
-    if(fHits->at(i)->GetE()!=fPS[i].energy) return;
+    // next scattering
+    incE = incE - depE;
+    for(int i=1; i<atrack.size()-1; i++){
+      depE = fHits->at(atrack[i])->GetE(); // keV
 
-    TVector3 hitpos(fPS[i].labpos[0],fPS[i].labpos[1],fPS[i].labpos[2]);
-    if(fHits->at(i)->GetRealPosition()!=hitpos) return;
+      Path *apath = new Path(fHits->at(atrack[i-1]),fHits->at(atrack[i]),fHits->at(atrack[i+1]),
+			     incE, depE, incE, depE);
+      int ipoint = agata->FitPath(apath);
+      if(ipoint>-1){
+	agata->AddPStoPSC(&fPS[atrack[i]], ipoint);
+	cPaths++;
+      }
+
+      delete apath;
+      
+      incE = incE - depE;
+    }
   }
-  cNotMatch--;
 
-  // Update PSCs-------------------------------------------------
-  for(int i=0; i<fPS.size(); i++){ //loop fPS
-    
-    if(uflag[i]!=1) continue;
-    int tmp = agata->AddPStoDiv(&fPS[i], fHits->at(i)); // add to divided pulse shape collection
-
-    if(tmp>maxnhitsdiv) maxnhitsdiv = tmp;
-    if(tmp>0) cDivPS++;
-  }//end of loop fPS
-
-  return;
-
+  delete fEvent;
+  return;  
 }
+
+
 
 
 PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nidxshift){
@@ -1239,9 +616,9 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
       TMatrixD tmpspulse(NSig*NSegCore,1);
       int tmpngrid = apsb->GetPS(itype, tmppos, tmpenergy, tmpseg, tmpspulse);
       if(tmpseg!=obj[iChain].pseg->at(idet)[i]){
-	cerr<<"segment not match!!! tmpseg = "<<tmpseg
-	    <<", simseg = "<<obj[iChain].pseg->at(idet)[i]<<endl;
-	return aps;
+        cerr<<"segment not match!!! tmpseg = "<<tmpseg
+            <<", simseg = "<<obj[iChain].pseg->at(idet)[i]<<endl;
+        return aps;
       }
       if(tmpngrid<1) return aps; // cannot get PS
       simspulse = simspulse + tmpspulse;
@@ -1250,33 +627,33 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   }
 
   // sum up in a segment
-  
+
   for(int i=0; i<simeng.size(); i++){
     for(int j=i+1; j<simeng.size(); j++){
       if(simseg[i]==simseg[j]){
-	siminterid[i] = simeng[i] > simeng[j] ? siminterid[i] : siminterid[j];
-	simnhits[i] = simnhits[i] + simnhits[j];
-	for(int jj=0; jj<simhiteng[j].size(); jj++) simhiteng[i].push_back(simhiteng[j][jj]);
-	double tmpe = simeng[i]+simeng[j];
+        siminterid[i] = simeng[i] > simeng[j] ? siminterid[i] : siminterid[j];
+        simnhits[i] = simnhits[i] + simnhits[j];
+        for(int jj=0; jj<simhiteng[j].size(); jj++) simhiteng[i].push_back(simhiteng[j][jj]);
+        double tmpe = simeng[i]+simeng[j];
 
-	for(int ix=0; ix<3; ix++){
-	  simlabpos[i][ix] = simeng[i]/tmpe*simlabpos[i][ix] + simeng[j]/tmpe*simlabpos[j][ix];
-	  simdetpos[i][ix] = simeng[i]/tmpe*simdetpos[i][ix] + simeng[j]/tmpe*simdetpos[j][ix];
-	}
+        for(int ix=0; ix<3; ix++){
+          simlabpos[i][ix] = simeng[i]/tmpe*simlabpos[i][ix] + simeng[j]/tmpe*simlabpos[j][ix];
+          simdetpos[i][ix] = simeng[i]/tmpe*simdetpos[i][ix] + simeng[j]/tmpe*simdetpos[j][ix];
+        }
 
-	simeng[i] = tmpe;
+        simeng[i] = tmpe;
 
-	simseg.erase(simseg.begin()+j);
-	siminterid.erase(siminterid.begin()+j);
-	simnhits.erase(simnhits.begin()+j);
-	simhiteng[j].clear();
-	simhiteng.erase(simhiteng.begin()+j);
-	simeng.erase(simeng.begin()+j);
+        simseg.erase(simseg.begin()+j);
+        siminterid.erase(siminterid.begin()+j);
+        simnhits.erase(simnhits.begin()+j);
+        simhiteng[j].clear();
+        simhiteng.erase(simhiteng.begin()+j);
+        simeng.erase(simeng.begin()+j);
 
-	simlabpos.erase(simlabpos.begin()+j);
-	simdetpos.erase(simdetpos.begin()+j);
+        simlabpos.erase(simlabpos.begin()+j);
+        simdetpos.erase(simdetpos.begin()+j);
 
-	j--;
+        j--;
       }
     }
   }
@@ -1289,7 +666,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   int idx;
   if(segidx<0) idx = 0;
   else         idx = segidx;
-  
+
   aps.det = obj[iChain].pdet->at(idet);
   aps.seg = simseg[idx];
   aps.interid = siminterid[idx];
@@ -1303,48 +680,46 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   }
 
   if(skipPS || segidx>-1) return aps; // skip PS
-  
-  if(kWithPS){
-#ifdef ADDPS
-    for(int iseg=0; iseg<NSegCore; iseg++){
-      for(int isig=0; isig<NSig; isig++){
-	double tmpamp = simspulse(iseg*NSig+isig,0);
-	aps.opulse[iseg][isig] = tmpamp/simeng[0];
-      }
-    }
-  
-#else
-    // read segments
-    for(int iseg=0; iseg<NSeg; iseg++){
-      for(int isig=0; isig<NSig; isig++){
-	double tmpamp = obj[iChain].spulse->at(idet)[iseg*NSig+isig];
-	aps.opulse[iseg][isig] = tmpamp/simeng[0];
-      }
-    }
 
-    // read core
+#ifdef ADDPS
+  for(int iseg=0; iseg<NSegCore; iseg++){
     for(int isig=0; isig<NSig; isig++){
-      double tmpamp = obj[iChain].core->at(idet)[isig];
-      aps.opulse[NSegCore-1][isig] = tmpamp/simeng[0];
+      double tmpamp = simspulse(iseg*NSig+isig,0);
+      aps.opulse[iseg][isig] = tmpamp/simeng[0];
     }
+  }
+
+#else
+  // read segments
+  for(int iseg=0; iseg<NSeg; iseg++){
+    for(int isig=0; isig<NSig; isig++){
+      double tmpamp = obj[iChain].spulse->at(idet)[iseg*NSig+isig];
+      aps.opulse[iseg][isig] = tmpamp/simeng[0];
+    }
+  }
+
+  // read core
+  for(int isig=0; isig<NSig; isig++){
+    double tmpamp = obj[iChain].core->at(idet)[isig];
+    aps.opulse[NSegCore-1][isig] = tmpamp/simeng[0];
+  }
 #endif
 
 #ifdef NOISE
-    if(nidx>=0){
-      // add noise
-      for(int iseg=0; iseg<NSegCore; iseg++){
-	for(int isig=0; isig<NSig; isig++){
-	  nidx = nidx%NOISE;
-	  aps.opulse[iseg][isig] += noise[nidx]/simeng[0];
-	  nidx++;
-	}
-	nidx+=nidxshift;
+  if(nidx>=0){
+    // add noise                                                                                                              
+    for(int iseg=0; iseg<NSegCore; iseg++){
+      for(int isig=0; isig<NSig; isig++){
+	nidx = nidx%NOISE;
+	aps.opulse[iseg][isig] += noise[nidx]/simeng[0];
+	nidx++;
       }
+      nidx+=nidxshift;
     }
+  }
 #endif
 
-  }
-  
+
   return aps;
 }
 

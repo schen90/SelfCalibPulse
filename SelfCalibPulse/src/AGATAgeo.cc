@@ -21,19 +21,13 @@ AGATAgeo::AGATAgeo(){
 			"G4Sim/pulsedb/LibTrap_B001.root",
 			"G4Sim/pulsedb/LibTrap_C001.root"};
   for(int itype=0; itype<NType; itype++){
-    //GridRange[itype][0][0] = -40.250;    GridRange[itype][0][1] = 39.750;
-    //GridRange[itype][1][0] = -40.250;    GridRange[itype][1][1] = 39.750;
-    //GridRange[itype][2][0] = 2.250;      GridRange[itype][2][1] = 90.250;
-
     LoadGrid(itype, gridfile[itype]);
   }
 
   NDets = 0;
   LoadMatrix("LookUp/CrystalPositionLookUpTable");
-  MakeSegmentMap();
-  //LoadNextSegTable("LookUp/NextSegTable");
   MakeSegPos();
-  //LoadSegPos("LookUp/SegPosTable");
+  MakeSegMap(2);
 
 }
 
@@ -122,68 +116,6 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
 }
 
 
-void AGATAgeo::LoadGridChi2sMap(string gridmapfile, float scale){
-  const int kMaxBufLen = 500;
-  ifstream fin(gridmapfile.c_str());
-  if(!fin){ cerr<<"cannot open map file: "<<gridmapfile<<" !!!"<<endl; return;}
-
-  cout<<"\e[1;32m read chi2slimit map at grid point \e[0m"<<endl;
-  char *buffer = new char[kMaxBufLen];
-
-  // init
-  for(int itype=0; itype<NType; itype++){
-    for(int ix=0; ix<GridMaxSteps; ix++)
-      for(int iy=0; iy<GridMaxSteps; iy++)
-        for(int iz=0; iz<GridMaxSteps; iz++){
-          gridchi2smap[itype][ix][iy][iz][0] = -1;
-          gridchi2smap[itype][ix][iy][iz][1] = -1;
-          gridchi2smap[itype][ix][iy][iz][2] = -1;
-        }
-  }
-
-  // read Map
-  while(!fin.eof()){
-    fin.getline(buffer,kMaxBufLen);
-    if(strncmp(buffer,"#Map",4)==0){
-      cout<<"reading Map"<<endl;
-      fin.getline(buffer,kMaxBufLen);
-      int itype, iseg, ipos[3];
-      double pos[3],chi2slimit[3];
-      while(1){
-        fin >> itype >> iseg >> pos[0] >> pos[1] >> pos[2];
-        if(itype==-1) break;
-
-	for(int iaxis=0; iaxis<3; iaxis++){
-	  if(pos[iaxis]-GridRange[itype][iaxis][0]<-0.1 ||
-             pos[iaxis]-GridRange[itype][iaxis][1]>0.1){
-            cout<<Form("axis%d: %.3f outside range %.3f ~ %.3f",iaxis,pos[iaxis],GridRange[itype][iaxis][0],GridRange[itype][iaxis][1])<<endl;
-            ipos[iaxis] = -1;
-          }else{
-            ipos[iaxis] = (int)((pos[iaxis] - GridRange[itype][iaxis][0]) / GridDist + 0.5);
-            if(fabs(pos[iaxis]-(GridRange[itype][iaxis][0]+GridDist*ipos[iaxis]))>0.1){
-              cout<<Form("axis%d: %.3f not a grid point",iaxis,pos[iaxis])<<endl;
-              ipos[iaxis] = -1;
-            }
-          }
-	}
-
-	for(int i=0; i<3; i++) fin>>chi2slimit[i];
-        if(ipos[0]<0 || ipos[1]<0 || ipos[2]<0) continue;
-        for(int i=0; i<3; i++){
-	  if(chi2slimit[i]>0) chi2slimit[i] *= scale;
-          gridchi2smap[itype][ipos[0]][ipos[1]][ipos[2]][i] = chi2slimit[i];
-        }
-	
-      }
-    }
-
-  }
-  fin.close();
-  return;
-}
-
-
-
 void AGATAgeo::LoadMatrix(string LookUpTable){
   // find input LookUpTable
   ifstream fin;
@@ -255,46 +187,15 @@ void AGATAgeo::MakeSegPos(){
 }
 
 
-void AGATAgeo::LoadSegPos(string SegPosTable){
-  // find input SegPosTable
-  ifstream fin;
-  int dummy_i;
-  fin.open(SegPosTable.c_str());
-  if(!fin){ cerr<<"Cannot find "<<SegPosTable<<endl; return;}
-  cout<<"\e[1;32m find Segment Position from "<<SegPosTable<<"... \e[0m"<<endl;
-
-  int detid, segid, nhits;
-  for(int i=0; i<NDets; i++){
-    for(int iseg=0; iseg<NSeg; iseg++){
-      fin >> detid >> segid >> nhits;
-      if(nhits<1){ cout<<"cannot find position for Det "<<detid<<", Seg "<<segid<<endl;}
-      SegPos[detid][segid].ResizeTo(3,1);
-      for(int it=0; it<3; it++) fin >> SegPos[detid][segid](it,0);
-    }
-  }
-
-  fin.close();
-  cout<<"read position for "<<NDets<<" detectors"<<endl;
-  
-  return;
-}
-
-
-void AGATAgeo::MakeSegmentMap(){
-  cout<<"Make Segment Map..";
-  //cout<<"\e[1;32m assign weight for comparison hitseg-1, core-1, nxsec-1, nxsli-1 \e[0m"<<endl;
+void AGATAgeo::MakeSegMap(int neighbours){
+  cout<<"Make Segment Map...";
+  memset(hmask, '0', sizeof(hmask));
+  // '1' self, '2' neighbour, '9' CC
   for(int iseg=0; iseg<NSeg; iseg++){
-    NextSec[iseg][0] = NextSec[iseg][1] = -1;
-    NextSli[iseg][0] = NextSli[iseg][1] = -1;
-    int NextSli2 = -1;
-    
     int isec = iseg/NSli;
     int isli = iseg%NSli;
 
     for(int jseg=0; jseg<NSeg; jseg++){
-
-      if(jseg==iseg) continue;
-
       int jsec = jseg/NSli;
       int jsli = jseg%NSli;
 
@@ -302,115 +203,16 @@ void AGATAgeo::MakeSegmentMap(){
       int distH = abs(jsec - isec);
       distH = min(distH, abs(jsec - isec + NSec));
       distH = min(distH, abs(jsec - isec - NSec));
-
-      if(distV==0 && distH==1){
-	if(NextSec[iseg][0]<0) NextSec[iseg][0] = jseg;
-	else                   NextSec[iseg][1] = jseg;
+      int mdist = distV + distH;
+      if(mdist<=neighbours && distH<neighbours && distV<neighbours){
+        hmask[iseg][jseg] = (iseg==jseg) ? '1' : '2';
       }
-
-      if(distH==0 && distV==1){
-	if(NextSli[iseg][0]<0) NextSli[iseg][0] = jseg;
-	else                   NextSli[iseg][1] = jseg;
-      }
-      if(distH==0 && distV==2) NextSli2 = jseg;
     }
 
-    if(NextSli[iseg][1]<0) NextSli[iseg][1] = NextSli2;
-  }
-
-  cout<<endl;
-
-  cout<<"assign segment weight..";
-  // assign weight for comparison
-  //cout<<"\e[1;32m assign weight for comparison hitseg-1, core-1, nxsec-1, nxsli-1 \e[0m"<<endl;
-  for(int iseg=0; iseg<NSeg; iseg++){
-    /*
-    for(int iiseg=0; iiseg<NSeg; iiseg++)
-      SegWeight[iseg][iiseg] = 0;
-
-    SegWeight[iseg][iseg] = 1;
-    SegWeight[iseg][NSegCore-1] = 1;
-    SegWeight[iseg][NextSec[iseg][0]] = 1;    SegWeight[iseg][NextSec[iseg][1]] = 1;
-    SegWeight[iseg][NextSli[iseg][0]] = 1;    SegWeight[iseg][NextSli[iseg][1]] = 1;
-    */
-
-    for(int iiseg=0; iiseg<NSegCore; iiseg++)
-      SegWeight[iseg][iiseg] = 1;
-
-    //SegWeight[iseg][iseg] = 0; // remove direct hit seg
-    //SegWeight[iseg][NSegCore-1] = 0; // remove core
+    hmask[iseg][NSegCore-1] = '9';
+    hmask[iseg][NSegCore] = 0; // to close each line as a string    
   }
   cout<<endl;
-
-  return;
-}
-
-
-void AGATAgeo::LoadNextSegTable(string NextSegTable){
-  // find input NextSegTable
-  ifstream fin;
-  int dummy_i;
-  fin.open(NextSegTable.c_str());
-  if(!fin){ cerr<<"Cannot find "<<NextSegTable<<endl; return;}
-  cout<<"\e[1;32m find Segment neighbor from "<<NextSegTable<<"... \e[0m"<<endl;
-
-  int segid, nxsec1, nxsec2, nxsli1, nxsli2;
-  int iseg;
-  for(iseg=0; iseg<NSeg; iseg++){
-    segid = -1;
-    fin >> segid >> nxsec1 >> nxsec2 >> nxsli1 >> nxsli2;
-    if(segid<0) break;
-    NextSec[segid][0] = nxsec1;   NextSec[segid][1] = nxsec2;
-    NextSli[segid][0] = nxsli1;   NextSli[segid][1] = nxsli2;
-  }
-
-  fin.close();
-  cout<<"read segment neighbor for "<<iseg<<" segments"<<endl;
-  
-  // assign weight for comparison
-  //cout<<"\e[1;32m assign weight for comparison hitseg-1, core-1, nxsec-1, nxsli-1 \e[0m"<<endl;
-  for(iseg=0; iseg<NSeg; iseg++){
-    /*
-    for(int iiseg=0; iiseg<NSeg; iiseg++)
-      SegWeight[iseg][iiseg] = 0;
-
-    SegWeight[iseg][iseg] = 1;
-    SegWeight[iseg][NSegCore-1] = 1;
-    SegWeight[iseg][NextSec[iseg][0]] = 1;    SegWeight[iseg][NextSec[iseg][1]] = 1;
-    SegWeight[iseg][NextSli[iseg][0]] = 1;    SegWeight[iseg][NextSli[iseg][1]] = 1;
-    */
-
-    for(int iiseg=0; iiseg<NSegCore; iiseg++)
-      SegWeight[iseg][iiseg] = 1;
-
-    //SegWeight[iseg][iseg] = 0; // remove direct hit seg
-    //SegWeight[iseg][NSegCore-1] = 0; // remove core
-  }
-
-  return;
-}
-
-
-void AGATAgeo::GetNextSegs(Int_t iseg, Int_t *fseg){
-  fseg[0] = iseg;
-  fseg[1] = NSegCore-1;
-  fseg[2] = NextSec[iseg][0];
-  fseg[3] = NextSec[iseg][1];
-  fseg[4] = NextSli[iseg][0];
-  fseg[5] = NextSli[iseg][1];
-
-#if NSeg_comp == 37
-  int idx = 6;
-  int uflg[NSeg_comp]; for(int i=0; i<NSeg_comp; i++) uflg[i]=0;
-  for(int i=0; i<idx; i++) uflg[fseg[i]]=1;
-  for(int i=0; i<NSegCore && idx<NSeg_comp; i++){
-    if(uflg[i]==1) continue;
-    fseg[idx] = i;
-    idx++;
-    uflg[i]=1;
-  }
-#endif
-  
   return;
 }
 
@@ -434,22 +236,6 @@ bool AGATAgeo::CheckBounds(int detid, int segid, const double *lpos){
 
   return true;
 }
-
-
-void AGATAgeo::GetChi2sLimit(int detid, const double *dpos, float chi2slimit[]){
-  int itype = detid%3;
-
-  int idx[3];
-  for(int ix=0; ix<3; ix++){
-    idx[ix] = (int)((dpos[ix]-GridRange[itype][ix][0]) / GridDist + 0.5);
-    if(idx[ix]<0 || idx[ix]>GridMaxSteps-1) return;
-  }
-
-  for(int ix=0; ix<3; ix++) chi2slimit[ix] = gridchi2smap[itype][idx[0]][idx[1]][idx[2]][ix];
-
-  return;
-}
-
 
 
 #endif
