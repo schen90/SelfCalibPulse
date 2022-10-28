@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=50                    # ...with two cores
 #SBATCH --mem=1424gb                          # Job memory request
 #SBATCH --time=48:00:00                       # Time limit hrs:min:sec
-#SBATCH --output=log/SC_fit_%j_1e11n.log      # Standard output and error log
+#SBATCH --output=log/SC_fit_%j_1e10.log      # Standard output and error log
 #SBATCH --account=phys-agata-2022             # Project account
 #SBATCH --partition=himem                     # Select nodes
 
@@ -18,7 +18,7 @@ echo
 
 module load devel/CMake/3.16.4-GCCcore-9.3.0 phys/Geant4/10.05.p01-foss-2020a phys/ROOT/6.22.02-foss-2020a-Python-3.8.2
 
-./build/SelfCalib -config config/config_noPS11.txt -Fit -loop 1 5
+./build/SelfCalib -config config/config_noPS10.txt -Fit -loop 5
 
 echo
 echo Job completed at `date`

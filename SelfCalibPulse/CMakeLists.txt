@@ -23,7 +23,7 @@ project(SelfCalib)
 #include(${Geant4_USE_FILE})
 include(FindROOT.cmake)
 #find_package(ROOT)
-set(ROOT_REQUIRED_COMPONENTS Core Hist Tree Rint Matrix MathCore Thread Minuit Minuit2)
+set(ROOT_REQUIRED_COMPONENTS Core Hist Tree Rint Matrix MathCore Thread)
 find_package(ROOT REQUIRED ${ROOT_REQUIRED_COMPONENTS})
 
 include_directories(${PROJECT_SOURCE_DIR}/include
