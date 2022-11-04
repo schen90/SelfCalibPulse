@@ -780,7 +780,7 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 	lock_guard<mutex> lock(treemtx); // lock tree read
 #endif
 	agata->GetPSCstat(PSCstat);
-	if(PSCstat[1]>1000000){
+	if(PSCstat[1]>2000000){
 	  //agata->SetAddNewPSC(false);
 	  cout<<endl<<"PSC-"<<PSCstat[1]<<" : remove small PSC"<<endl;
 	  agata->RemoveSmallPSC(5);

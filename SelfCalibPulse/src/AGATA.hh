@@ -143,6 +143,9 @@ private:
   mutex PSCmtx[MaxNDets][NSeg]; // fPSC lock for threads
   mutex AllHCmtx;
   bool kAddNewPSC = true;
+
+  vector<Int_t> HCMap[MaxNDets][NSeg];
+  Int_t         HCstat[MaxNDets][NSeg][2]; // 0: fHCs size, 1: fHCs max idx
   
   // EventHits
   int nConfig = 0;

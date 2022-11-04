@@ -394,11 +394,27 @@ void AGATA::LoadHCfiles(int detid){
     HitCollection* ahc = new HitCollection(det, seg, index, labpos, calpos);
 
     fHCs[det][seg]->push_back(ahc);
+    HCMap[det][seg].push_back(index);
     ahc->SetGid(ihc);
     fAllHCs->push_back(ahc);
     cHCs++;
   }
-  cout<<"\r load "<<ihc<<" / "<<Nhcs<<" HitCollections..."<<endl;
+
+  double MemUsageGB = GetCurrentMemoryUsage()/GB;
+  double MemTotalGB = GetTotalSystemMemory()/GB;
+  cout<<"\r load "<<ihc<<" / "<<Nhcs<<" HitCollections..."<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."<<endl;
+
+  for(int idet : idlist){
+    for(int iseg=0; iseg<NSeg; iseg++){
+      HCstat[idet][iseg][0] = fHCs[idet][iseg]->size();
+      HCstat[idet][iseg][1] = fHCs[idet][iseg]->back()->GetPid();
+
+      cout<<"\r fHCs["<<idet<<"]["<<iseg<<"]->"
+	  <<"at("<<HCstat[idet][iseg][0]-1<<")->Pid = "<<HCstat[idet][iseg][1]<<flush;
+
+    }
+  }
+  cout<<endl;
 
   return;
 }
@@ -408,7 +424,10 @@ void AGATA::ClearHCMem(){
   for(int idet = 0; idet<NDets; idet++)
     for(int iseg=0; iseg<NSeg; iseg++){
       fHCs[idet][iseg]->clear();
+      HCMap[idet][iseg].clear();
       fHCs[idet][iseg]->shrink_to_fit();
+      HCstat[idet][iseg][0] = 0;
+      HCstat[idet][iseg][1] = -1;
     }
 
   for(HitCollection* ahc : *fAllHCs) delete ahc;
@@ -1004,7 +1023,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 	// connect with HCs
 	for(int ii=0; ii<vhcid[i].size(); ii++){
 	  int pscid = vhcid[i][ii];
-	  if(pscid>fHCs[detid][segid]->back()->GetPid()){
+	  if( pscid > HCstat[detid][segid][1] ){
 	    cerr<<"pscid = "<<pscid<<" outside fHCs["<<detid<<"]["<<segid<<"] range!!!!"<<endl;
 	    continue;
 	  }
@@ -1097,7 +1116,10 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     }
 
     // load hits from iconfig, irun
-    cout<<"\r \e[1;33m Load Hits from "<<hfilename0<<"... \e[0m"<<flush;
+    double MemUsageGB = GetCurrentMemoryUsage()/GB;
+    double MemTotalGB = GetTotalSystemMemory()/GB;
+    cout<<"\r \e[1;33m Load Hits from "<<hfilename0<<"... "
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."<<"\e[0m"<<flush;
 
     int MaxEntry = -1;
 
@@ -1227,7 +1249,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	// connect with HCs
 	for(int ii=0; ii<vhcid[i].size(); ii++){
 	  int pscid = vhcid[i][ii];
-	  if(pscid>fHCs[detid][segid]->back()->GetPid()){
+	  if( pscid > HCstat[detid][segid][1] ){
 	    cerr<<"pscid = "<<pscid<<" outside fHCs["<<detid<<"]["<<segid<<"] range!!!!"<<endl;
 	    continue;
 	  }
@@ -1339,12 +1361,17 @@ void AGATA::SortPSC(){
 
 int AGATA::FindHC(int detid, int segid, int pscid){
   int ipsc = -1;
-  int npsc = fHCs[detid][segid]->size();
-  for(int i=0; i<npsc; i++){
-    int tmpid = fHCs[detid][segid]->at(i)->GetPid();
-    if     ( tmpid <  pscid ) continue;
-    else if( tmpid == pscid){ ipsc=i; break;}
-    else if( tmpid >  pscid) break;
+  int npsc = HCstat[detid][segid][0];
+
+  int itmp = min(pscid, npsc-1);
+  for(int i=0; i<npsc; i++, itmp--){
+
+    if( unlikely( itmp < 0 ) ) itmp+=npsc;
+
+    int tmpid = HCMap[detid][segid][itmp];
+    if     ( tmpid >  pscid ) continue;
+    else if( tmpid == pscid){ ipsc=itmp; break;}
+    else if( tmpid <  pscid) break;
   }
   
   return ipsc;
@@ -1650,7 +1677,7 @@ void AGATA::FindDevCut(){
 	      apsc->devabscut[is] = 0.99*apsc->devabs[is][0];
 
 	    }else{
-	      int ncut = (int)(0.5*nsize);
+	      int ncut = (int)(0.75*nsize); // 0.5
 	      apsc->devabscut[is] = apsc->devabs[is][ncut];
 	    }
 	  }
@@ -1685,13 +1712,15 @@ void AGATA::FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone){
     }
 
     if(dev[0] <= apsc->devabscut[is]) tmp.push_back(0); // center zone
-    if(dev[0] >  apsc->devabscut[is]){
-      if(     dev[1] >  0.5 * dev[0]) tmp.push_back(1);      // above zone
-      else if(dev[1] < -0.5 * dev[0]) tmp.push_back(2);      // below zone
+    if(dev[0] >  0.5*apsc->devabscut[is]){ // <------- add 0.8
+      if( dev[1] >=  0.6 * dev[0]) tmp.push_back(1);    // above zone
+      if( dev[1] <= -0.6 * dev[0]) tmp.push_back(2);    // below zone
       // bipolar zone
-      else                            tmp.push_back(3);      // bipolar zone
-      //else if(dev[2] >  0)            tmp.push_back(3);      // bipolar zone +-
-      //else                            tmp.push_back(4);      // bipolar zone -+
+      if( dev[1]<0.7*dev[0] && dev[1]>-0.7*dev[0]){
+	//tmp.push_back(3);                               // bipolar zone
+	if(dev[2] >  0) tmp.push_back(3);               // bipolar zone +-
+	else            tmp.push_back(4);               // bipolar zone -+
+      }
     }
 
     divzone->push_back(tmp);
