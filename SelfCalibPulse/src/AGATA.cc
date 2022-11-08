@@ -1405,7 +1405,7 @@ int AGATA::InitPSCandHC(int detid, int segid){
     for(int iseg=0; iseg<NSeg_comp; iseg++){
       newpsc->divzone[iseg] = -1;
       newpsc->segcmp[iseg] = fseg[iseg];
-      newpsc->devabscut[iseg] = -1;
+      newpsc->devabscut[iseg][0] = -1;
       newpsc->devabs[iseg] = vector<float>(0);
     }
     for(int iseg=0; iseg<NSegCore; iseg++){
@@ -1667,18 +1667,23 @@ void AGATA::FindDevCut(){
       for(PSC *apsc : *fPSC[idet][iseg]){
 
 	for(int is=0; is<NSeg_comp; is++){
-	  if(apsc->devabscut[is]<0){
+	  if(apsc->devabscut[is][0]<0){
 	    sort(apsc->devabs[is].begin(), apsc->devabs[is].end(), [](const float& l, const float& r){return l<r;});
 	    int nsize = apsc->devabs[is].size();
 	    if(nsize<1) continue;
 
 	    if(apsc->devabs[is][0] > (0.2*apsc->devabs[is][nsize-1])){
 	      // empty center zone
-	      apsc->devabscut[is] = 0.99*apsc->devabs[is][0];
+	      apsc->devabscut[is][0] = 0.99*apsc->devabs[is][0];
+	      apsc->devabscut[is][1] = 0.99*apsc->devabs[is][0];
 
 	    }else{
-	      int ncut = (int)(0.75*nsize); // 0.5
-	      apsc->devabscut[is] = apsc->devabs[is][ncut];
+	      int ncut;
+	      ncut = (int)(0.75*nsize); // 0.5
+	      apsc->devabscut[is][0] = apsc->devabs[is][ncut];
+
+	      ncut = (int)(0.4*nsize); // 0.5
+	      apsc->devabscut[is][1] = apsc->devabs[is][ncut];
 	    }
 	  }
 
@@ -1706,13 +1711,13 @@ void AGATA::FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone){
     Devseg(asegpulse, bsegpulse, dev);
     vector<int> tmp;
 
-    if(apsc->devabscut[is]<0){
-      cout<<"devabscut<0 ; something wrong!!!"<<endl;
+    if(apsc->devabscut[is][0]<0){
+      cout<<"devabscut[0]<0 ; something wrong!!!"<<endl;
       return;
     }
 
-    if(dev[0] <= apsc->devabscut[is]) tmp.push_back(0); // center zone
-    if(dev[0] >  0.5*apsc->devabscut[is]){ // <------- add 0.8
+    if(dev[0] <= apsc->devabscut[is][0]) tmp.push_back(0); // center zone
+    if(dev[0] >  apsc->devabscut[is][1]){
       if( dev[1] >=  0.6 * dev[0]) tmp.push_back(1);    // above zone
       if( dev[1] <= -0.6 * dev[0]) tmp.push_back(2);    // below zone
       // bipolar zone
@@ -1970,7 +1975,7 @@ void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
 
   for(int is=0; is<NSeg_comp; is++){
     fPSC[detid][segid]->at(ipsc)->divzone[is] = -1;
-    fPSC[detid][segid]->at(ipsc)->devabscut[is] = -1;
+    fPSC[detid][segid]->at(ipsc)->devabscut[is][0] = -1;
     fPSC[detid][segid]->at(ipsc)->devabs[is].clear();
   }
   fPSC[detid][segid]->at(ipsc)->dividx.clear();

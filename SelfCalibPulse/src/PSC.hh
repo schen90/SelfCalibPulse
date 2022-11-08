@@ -22,7 +22,7 @@ public:
   float detpos[3];     // average interaction position in detframe float(3)
 
   int   segcmp[NSeg_comp];        // segments for comparison
-  float devabscut[NSeg_comp];
+  float devabscut[NSeg_comp][2];
   //float maxdevabs[NSeg_comp];     // max deviation (abs) value
   vector<float> devabs[NSeg_comp];     // all deviation (abs) values
   float spulse[NSegCore][NSig];   // average pulse shape
