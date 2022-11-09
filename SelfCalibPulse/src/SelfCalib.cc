@@ -245,6 +245,8 @@ int main(int argc, char* argv[]){
     bool kRemove = true;
     while(kRemove){
       cout<<"\033[1;31m"<<"Remove strange PS "<<nremove<<": \033[0m"<<endl;
+      if(nremove<2) agata->SetNSigma(2.);
+      else          agata->SetNSigma(3.);
       
       time(&stepstart);
       if(kConfig) treereader->GenerateHCs(3,agata);

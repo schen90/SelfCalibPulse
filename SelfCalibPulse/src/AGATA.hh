@@ -87,7 +87,9 @@ public:
   int   AddPStoDiv(PS *aps, Hit *ahit);
 
   int   CheckPSinPSC(PS *aps, Hit *ahit);
-
+  void  SetNSigma(int val){ nSigma = val; cout<<Form("nSigma = %.1f",nSigma)<<endl;}
+  float GetNSigma(){ return nSigma;}
+  
   void MakeCPulse();
   
   void  RemoveMotherPSC();
@@ -155,7 +157,8 @@ private:
   mutex PSCmtx[MaxNDets][NSeg]; // fPSC lock for threads
   mutex AllHCmtx;
   bool kAddNewPSC = true;
-
+  float nSigma = 3.;
+  
   vector<Int_t> HCMap[MaxNDets][NSeg];
   Int_t         HCstat[MaxNDets][NSeg][2]; // 0: fHCs size, 1: fHCs max idx
   

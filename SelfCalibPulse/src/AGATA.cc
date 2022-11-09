@@ -1901,7 +1901,7 @@ int AGATA::CheckPSinPSC(PS *aps, Hit *ahit){
       float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
       Devseg(asegpulse, bsegpulse, dev);
 
-      if( fabs(dev[1]) > 3*apsc->devsigma[is] ) kreject = true;
+      if( fabs(dev[1]) > nSigma*apsc->devsigma[is] ) kreject = true;
       
       if(kreject) break;
     }
