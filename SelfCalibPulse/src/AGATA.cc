@@ -1683,10 +1683,10 @@ void AGATA::FindDevCut(){
 
 	    }else{
 	      int ncut;
-	      ncut = (int)(0.75*nsize); // 0.5
+	      ncut = (int)(0.6*nsize); // 0.5
 	      apsc->devabscut[is][0] = apsc->devabs[is][ncut];
 
-	      ncut = (int)(0.4*nsize); // 0.5
+	      ncut = (int)(0.45*nsize); // 0.5
 	      apsc->devabscut[is][1] = apsc->devabs[is][ncut];
 	    }
 	  }
