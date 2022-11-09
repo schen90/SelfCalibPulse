@@ -153,6 +153,7 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 	for(int iiseg=0; iiseg<NSegCore; iiseg++){
 	  copy_n(fPSC[idet][iseg]->at(ic)->spulse[iiseg], NSig, spulse[iiseg]);
 	}
+	copy_n(fPSC[idet][iseg]->at(ic)->devsigma, NSeg_comp, devsigma);
 
 	npaths = fHCs[idet][iseg]->at(ic)->GetPaths()->size();
 	
@@ -233,6 +234,7 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 	for(int iiseg=0; iiseg<NSegCore; iiseg++){
 	  copy_n(spulse[iiseg], NSig, apsc->spulse[iiseg]);
 	}
+	copy_n(devsigma, NSeg_comp, apsc->devsigma);
 	
 	fPSC[idet][iseg]->push_back(apsc);
 	cPSCtotal++;   cPSCmem++;
@@ -1406,7 +1408,9 @@ int AGATA::InitPSCandHC(int detid, int segid){
       newpsc->divzone[iseg] = -1;
       newpsc->segcmp[iseg] = fseg[iseg];
       newpsc->devabscut[iseg][0] = -1;
+      newpsc->devsigma[iseg] = -1;
       newpsc->devabs[iseg] = vector<float>(0);
+      newpsc->dev[iseg] = vector<float>(0);
     }
     for(int iseg=0; iseg<NSegCore; iseg++){
       for(int isig=0; isig<NSig; isig++){
@@ -1698,6 +1702,68 @@ void AGATA::FindDevCut(){
 }
 
 
+void AGATA::FindDevSigma(PS *aps, Hit *ahit){
+  int detid = aps->det;
+  int segid = aps->seg;
+  
+#ifdef NTHREADS
+  lock_guard<mutex> lock(PSCmtx[detid][segid]); // lock PSC for one segment
+#endif
+
+  vector<HitCollection*>* hcs = ahit->GetHitCollections();
+  for(HitCollection* ahc : *hcs){
+    int ipsc = ahc->GetPid();
+    PSC *apsc = fPSC[detid][segid]->at(ipsc);
+
+    for(int is=0; is<NSeg_comp; is++){
+      int iseg = apsc->segcmp[is];
+
+      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
+      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
+      copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
+
+      float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
+      Devseg(asegpulse, bsegpulse, dev);
+      apsc->dev[is].push_back(dev[1]);
+
+    }
+  }
+
+  return;
+}
+
+
+void AGATA::CalcDevSigma(){
+  for(int idet=0; idet<MaxNDets; idet++){
+    for(int iseg=0; iseg<NSeg; iseg++){
+
+      for(PSC *apsc : *fPSC[idet][iseg]){
+
+	for(int is=0; is<NSeg_comp; is++){
+	  int nsize = apsc->dev[is].size();
+	  if(nsize<1) continue;
+
+	  double sum = accumulate(apsc->dev[is].begin(), apsc->dev[is].end(), 0.0);
+	  double mean = sum / nsize;
+
+	  vector<double> diff(nsize);
+	  transform(apsc->dev[is].begin(), apsc->dev[is].end(), diff.begin(),
+		    bind2nd(minus<double>(), mean));
+	  double sq_sum = inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+	  double stdev = sqrt(sq_sum/nsize);
+	  apsc->devsigma[is] = stdev;
+
+	  apsc->dev[is].clear();
+	}
+      }
+
+    }
+  }
+
+  return;  
+}
+
+
 void AGATA::FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone){
 
   for(int is=0; is<NSeg_comp; is++){
@@ -1814,6 +1880,74 @@ int AGATA::AddPStoDiv(PS *aps, Hit *ahit){
 }
 
 
+int AGATA::CheckPSinPSC(PS *aps, Hit *ahit){
+  int detid = aps->det;
+  int segid = aps->seg;
+
+  int nremove = 0;
+  vector<HitCollection*>* hcs = ahit->GetHitCollections();
+  for(HitCollection* ahc : *hcs){ // loop HitCollections
+    int ipsc = ahc->GetPid();
+    PSC *apsc = fPSC[detid][segid]->at(ipsc);
+
+    bool kreject = false;
+    for(int is=0; is<NSeg_comp; is++){
+      int iseg = apsc->segcmp[is];
+
+      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
+      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
+      copy_n(apsc->cpulse[is],   NSig_comp, bsegpulse);
+
+      float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
+      Devseg(asegpulse, bsegpulse, dev);
+
+      if( fabs(dev[1]) > 3*apsc->devsigma[is] ) kreject = true;
+      
+      if(kreject) break;
+    }
+
+    if(kreject){
+      RemovePSfromPSC(aps, ahit, ipsc);
+      nremove++;
+    }
+    
+  } // end of loop HitCollections
+  
+  return nremove;
+}
+
+
+void AGATA::MakeCPulse(){
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++)
+    for(int segid=0; segid<NSeg; segid++)
+      PSCmtx[detid][segid].lock(); // lock PSC for one segment
+#endif
+
+  cout<<"\e[1;31m Make cpulse for all PSCs ... \e[0m"<<endl;
+  for(int detid=0; detid<MaxNDets; detid++){
+    for(int segid=0; segid<NSeg; segid++){
+      for(PSC* apsc : *fPSC[detid][segid]){
+
+	for(int is=0; is<NSeg_comp; is++){
+	  int iseg = apsc->segcmp[is];
+	  copy_n(apsc->spulse[iseg], NSig, apsc->cpulse[is]);
+	}
+
+      }
+    }
+  }
+
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++)
+    for(int segid=0; segid<NSeg; segid++)
+      PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
+#endif
+  
+  return;
+}
+
+
 void AGATA::RemoveMotherPSC(){
 #ifdef NTHREADS
   for(int detid=0; detid<MaxNDets; detid++)
@@ -1879,7 +2013,7 @@ void AGATA::RemoveSmallPSC(int minhits){
 
 
 
-void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit){ // remove ahit from all PSCs
+void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit, int jpsc){ // remove ahit from PSC(s)
   int detid = aps->det;
   int segid = aps->seg;
 
@@ -1894,6 +2028,8 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit){ // remove ahit from all PSCs
   for(HitCollection* ahc : *hcs){
 
     int ipsc = ahc->GetPid();
+
+    if(jpsc>-1 && ipsc!=jpsc) continue;
 
     double nhitstmp = (double)fPSC[detid][segid]->at(ipsc)->nhits;
 
@@ -1937,12 +2073,22 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit){ // remove ahit from all PSCs
       cHCs--;
     }
 
+    if(jpsc>-1){
+      ahit->RemoveHitCollection(ahc);
+    }
   }//end of loop hcs
 
-  ahit->ClearHitCollection();
+  if(jpsc<0){
+    ahit->ClearHitCollection();
+    cPStotal--;
+    cHits--;
 
-  cPStotal--;
-  cHits--;
+  }else{
+    if(ahit->hasHitCollection()<1){
+      cPStotal--;
+      cHits--;
+    }
+  }
 
   return;
 }
@@ -1976,7 +2122,9 @@ void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
   for(int is=0; is<NSeg_comp; is++){
     fPSC[detid][segid]->at(ipsc)->divzone[is] = -1;
     fPSC[detid][segid]->at(ipsc)->devabscut[is][0] = -1;
+    fPSC[detid][segid]->at(ipsc)->devsigma[is] = -1;
     fPSC[detid][segid]->at(ipsc)->devabs[is].clear();
+    fPSC[detid][segid]->at(ipsc)->dev[is].clear();
   }
   fPSC[detid][segid]->at(ipsc)->dividx.clear();
   
@@ -2862,6 +3010,7 @@ void AGATA::InitTreeWrite(TTree *tree){
   tree->Branch("dist2",&dist2);
 
   tree->Branch("spulse",spulse,Form("spulse[%d][%d]/F",NSegCore,NSig));  
+  tree->Branch("devsigma",devsigma,Form("devsigma[%d]/F",NSeg_comp));  
 
   tree->Branch("npaths",&npaths);
 }
@@ -2880,6 +3029,7 @@ void AGATA::InitTreeRead(TTree *tree){
   tree->SetBranchAddress("detpos",detpos);
 
   tree->SetBranchAddress("spulse",spulse);
+  tree->SetBranchAddress("devsigma",devsigma);
 
   tree->SetBranchAddress("npaths",&npaths);
 }

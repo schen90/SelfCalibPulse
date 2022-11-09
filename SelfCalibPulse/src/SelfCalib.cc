@@ -238,6 +238,43 @@ int main(int argc, char* argv[]){
 	  <<"\033[0m"<<endl<<endl;
       ndiv++;
     }
+
+    
+    // remove strange PS from PSC
+    int nremove = 0;
+    bool kRemove = true;
+    while(kRemove){
+      cout<<"\033[1;31m"<<"Remove strange PS "<<nremove<<": \033[0m"<<endl;
+      
+      time(&stepstart);
+      if(kConfig) treereader->GenerateHCs(3,agata);
+      if(kConfig) agata->CalcDevSigma();
+      time(&stepstop);
+      printf("=== FindDevSigma time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+      time(&stepstart);
+      if(kConfig) agata->MakeCPulse();
+      if(kConfig) treereader->GenerateHCs(4,agata);
+      time(&stepstop);
+      printf("=== Remove strange PS time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+      kRemove = false;
+      if( treereader->GetRemovePSNumber() > 0 ) kRemove = true;
+
+      time(&stepstart);
+      if(kConfig) agata->RemoveSmallPSC(MINHITS);
+      time(&stepstop);
+      printf("=== Remove PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+      
+      agata->CheckPSCstat(PSCstat);
+      cout<<"\033[1m"<<"PSC stats:"
+	  <<"  maxnhits = "<<PSCstat[0]
+	  <<" ; nPSC = "<<PSCstat[1]
+	  <<" ; nEmpty = "<<PSCstat[2]
+	  <<"\033[0m"<<endl<<endl;
+      nremove++;
+    }
+
     
     // save grouped HCs and Hits
     time(&stepstart);

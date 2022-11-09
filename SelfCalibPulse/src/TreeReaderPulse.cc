@@ -580,11 +580,9 @@ void TreeReaderPulse::Init(int i){
   fChain[i]->SetBranchAddress("ngrid",&obj[i].ngrid);
 
 #ifndef ADDPS
-  if(kWithPS){
-    //fChain[i]->SetBranchAddress("extrpl",&obj[i].extrpl);
-    fChain[i]->SetBranchAddress("core",&obj[i].core);
-    fChain[i]->SetBranchAddress("spulse",&obj[i].spulse);
-  }
+  //fChain[i]->SetBranchAddress("extrpl",&obj[i].extrpl);
+  fChain[i]->SetBranchAddress("core",&obj[i].core);
+  fChain[i]->SetBranchAddress("spulse",&obj[i].spulse);
 #endif
   
   fChain[i]->SetBranchAddress("category",&obj[i].category);
@@ -598,9 +596,15 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata){
   if     (opt==0) cout<<"\e[1;31m Generate initial PSC ... \e[0m"<<endl;
   else if(opt==1) cout<<"\e[1;31m Find Max Deviation ... \e[0m"<<endl;
   else if(opt==2) cout<<"\e[1;31m Divide PSC ... \e[0m"<<endl;
+  else if(opt==3) cout<<"\e[1;31m Find Dev Sigma ... \e[0m"<<endl;
+  else if(opt==4) cout<<"\e[1;31m Remove strange PS from PSCs ... \e[0m"<<endl;
 
   if(opt>0){
     cNotMatch  = 0;
+  }
+
+  if(opt==4){
+    cRemovePS = 0;
   }
 
   if(nConfig<1){
@@ -710,31 +714,48 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 
   if(opt==0){ // initial PSC
     cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	<<Form("(%.0fs/10kevts)..",difftime(stop,start))
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
 	<<" PSC-"<<PSCstat[1]
 	<<" maxnhits-"<<PSCstat[4]<<".."
-	<<"fEventHits-"<<NEventHits<<endl;
+	<<"fEventHits-"<<NEventHits<<".."<<endl;
 
   }else if(opt==1){ // find max dev
     cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	<<Form("(%.0fs/10kevts)..",difftime(stop,start))
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
 	<<" PSC-"<<PSCstat[1]
 	<<" maxnhits-"<<PSCstat[4]<<".."
-	<<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<endl;
+	<<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<".."<<endl;
 
   }else if(opt==2){ // divide PSC
     cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	<<Form("(%.0fs/10kevts)..",difftime(stop,start))
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
 	<<" PSC-"<<PSCstat[1]
 	<<" DivPS-"<<cDivPS<<" NotMatch-"<<cNotMatch<<".."
 	<<" maxnhitsdiv-"<<maxnhitsdiv
-	<<" maxndiv-"<<PSCstat[8]<<endl;
+	<<" maxndiv-"<<PSCstat[8]<<".."<<endl;
+
+  }else if(opt==3){ // find dev sigma
+    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	<<"PS-"<<PSCstat[0]
+	<<" PSC-"<<PSCstat[1]
+	<<" maxnhits-"<<PSCstat[4]<<".."<<endl;
+
+  }else if(opt==4){ // remove PS
+    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	<<"PS-"<<PSCstat[0]
+	<<" PSC-"<<PSCstat[1]
+	<<" RemovePS-"<<cRemovePS<<" NotMatch-"<<cNotMatch<<".."<<endl;
+
   }
 
   return;
@@ -772,7 +793,7 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
       if(kInterrupt) break;
     
       // output state
-      if(ievt%10000==0 && kcout){
+      if(ievt%100000==0 && kcout){
 	kcout = false;      
 	time(&stop);
 
@@ -792,30 +813,47 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 
 	if(opt==0){ // initial PSC
 	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	      <<Form("(%.0fs/10kevts)..",difftime(stop,start))
+	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
 	      <<" PSC-"<<PSCstat[1]
-	      <<" maxnhits-"<<PSCstat[4]<<flush;
+	      <<" maxnhits-"<<PSCstat[4]<<".."<<flush;
 
-	}else if(opt==1){ // find max dev
+	}else if(opt==1){ // find max absdev
 	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	      <<Form("(%.0fs/10kevts)..",difftime(stop,start))
+	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
 	      <<" PSC-"<<PSCstat[1]
 	      <<" maxnhits-"<<PSCstat[4]<<".."
-	      <<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<flush;
+	      <<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<".."<<flush;
 
 	}else if(opt==2){ // divide PSC
 	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
-	      <<Form("(%.0fs/10kevts)..",difftime(stop,start))
+	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
 	      <<" PSC-"<<PSCstat[1]
 	      <<" DivPS-"<<cDivPS<<" NotMatch-"<<cNotMatch<<".."
 	      <<" maxnhitsdiv-"<<maxnhitsdiv
-	      <<" maxndiv-"<<PSCstat[8]<<flush;
+	      <<" maxndiv-"<<PSCstat[8]<<".."<<flush;
+
+	}else if(opt==3){ // find dev sigma
+	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	      <<"PS-"<<PSCstat[0]
+	      <<" PSC-"<<PSCstat[1]
+	      <<" maxnhits-"<<PSCstat[4]<<".."<<flush;
+
+	}else if(opt==4){ // remove PS
+	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	      <<"PS-"<<PSCstat[0]
+	      <<" PSC-"<<PSCstat[1]
+	      <<" RemovePS-"<<cRemovePS<<" NotMatch-"<<cNotMatch<<".."<<flush;
+
 	}
       
 	if(MemUsage>MaxMemUsage){
@@ -830,8 +868,10 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 
       // work on entry
       if     (opt==0) GenerateHCsworker(iconfig, run, iChain, agata, ientry, nentries);
-      else if(opt==1) FindMaxDevworker( iconfig, run, iChain, agata, ientry, nentries, istart);
-      else if(opt==2) UpdateHCsworker(  iconfig, run, iChain, agata, ientry, nentries, istart);
+      else if(opt==1) FindDevworker( 0, iconfig, run, iChain, agata, ientry, nentries, istart); // find absdev
+      else if(opt==2) UpdateHCsworker( 0, iconfig, run, iChain, agata, ientry, nentries, istart); // divide HCs
+      else if(opt==3) FindDevworker( 1, iconfig, run, iChain, agata, ientry, nentries, istart); // find dev
+      else if(opt==4) UpdateHCsworker( 1, iconfig, run, iChain, agata, ientry, nentries, istart); // remove strange PS from PSCs
 
     }//end of loop evts
 
@@ -999,8 +1039,8 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 }
 
 
-void TreeReaderPulse::FindMaxDevworker(int iconfig, int run, int iChain, AGATA *agata,
-				       int ientry, long long nentries, long long &istart){
+void TreeReaderPulse::FindDevworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
+				    int ientry, long long nentries, long long &istart){
 
   if(ievt>=nentries) return;
   
@@ -1071,10 +1111,16 @@ void TreeReaderPulse::FindMaxDevworker(int iconfig, int run, int iChain, AGATA *
 
   // check PSCs-------------------------------------------------
   for(int i=0; i<fPS.size(); i++){ //loop fPS
-    
-    float tmpdev = agata->FindMaxDev(&fPS[i], fHits->at(i)); // find max deviation
 
-    if(tmpdev>MaxDev) MaxDev = tmpdev;    
+    if(opt==0){
+      float tmpdev = agata->FindMaxDev(&fPS[i], fHits->at(i)); // find max abs deviation
+      if(tmpdev>MaxDev) MaxDev = tmpdev;    
+    }
+
+    if(opt==1){
+      agata->FindDevSigma(&fPS[i], fHits->at(i)); // find deviation sigma
+    }
+    
   }//end of loop fPS
 
   return;
@@ -1082,7 +1128,7 @@ void TreeReaderPulse::FindMaxDevworker(int iconfig, int run, int iChain, AGATA *
 }
 
 
-void TreeReaderPulse::UpdateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
+void TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
 				      int ientry, long long nentries, long long &istart){
 
   if(ievt>=nentries) return;
@@ -1113,11 +1159,18 @@ void TreeReaderPulse::UpdateHCsworker(int iconfig, int run, int iChain, AGATA *a
 
     if(Detid>-1 && fHits->at(i)->GetDet()!=Detid) continue; // selected Detid
 
-    vector<HitCollection*>* hcs = fHits->at(i)->GetHitCollections();
-    for(HitCollection* ahc : *hcs){
-      if(ahc->GetSize() > MAXHITS) kFindPS = true;
-      if(kFindPS) break;
+    if(opt==0){
+      vector<HitCollection*>* hcs = fHits->at(i)->GetHitCollections();
+      for(HitCollection* ahc : *hcs){
+	if(ahc->GetSize() > MAXHITS) kFindPS = true;
+	if(kFindPS) break;
+      }
     }
+
+    if(opt==1){
+      kFindPS = true;
+    }
+    
     if(kFindPS) break;
   }
   
@@ -1171,12 +1224,20 @@ void TreeReaderPulse::UpdateHCsworker(int iconfig, int run, int iChain, AGATA *a
 
   // Update PSCs-------------------------------------------------
   for(int i=0; i<fPS.size(); i++){ //loop fPS
-    
-    if(uflag[i]!=1) continue;
-    int tmp = agata->AddPStoDiv(&fPS[i], fHits->at(i)); // add to divided pulse shape collection
 
-    if(tmp>maxnhitsdiv) maxnhitsdiv = tmp;
-    if(tmp>0) cDivPS++;
+    if(opt==0){
+      if(uflag[i]!=1) continue;
+      int tmp = agata->AddPStoDiv(&fPS[i], fHits->at(i)); // add to divided pulse shape collection
+      if(tmp>maxnhitsdiv) maxnhitsdiv = tmp;
+      if(tmp>0) cDivPS++;
+    }
+
+    if(opt==1){
+      if(uflag[i]!=1) continue;
+      int tmp = agata->CheckPSinPSC(&fPS[i], fHits->at(i)); // check if PS within 3 sigma of PSC
+      if(tmp>0) cRemovePS++;
+    }
+    
   }//end of loop fPS
 
   return;
@@ -1304,47 +1365,44 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
 
   if(skipPS || segidx>-1) return aps; // skip PS
   
-  if(kWithPS){
 #ifdef ADDPS
-    for(int iseg=0; iseg<NSegCore; iseg++){
-      for(int isig=0; isig<NSig; isig++){
-	double tmpamp = simspulse(iseg*NSig+isig,0);
-	aps.opulse[iseg][isig] = tmpamp/simeng[0];
-      }
+  for(int iseg=0; iseg<NSegCore; iseg++){
+    for(int isig=0; isig<NSig; isig++){
+      double tmpamp = simspulse(iseg*NSig+isig,0);
+      aps.opulse[iseg][isig] = tmpamp/simeng[0];
     }
+  }
   
 #else
-    // read segments
-    for(int iseg=0; iseg<NSeg; iseg++){
-      for(int isig=0; isig<NSig; isig++){
-	double tmpamp = obj[iChain].spulse->at(idet)[iseg*NSig+isig];
-	aps.opulse[iseg][isig] = tmpamp/simeng[0];
-      }
-    }
-
-    // read core
+  // read segments
+  for(int iseg=0; iseg<NSeg; iseg++){
     for(int isig=0; isig<NSig; isig++){
-      double tmpamp = obj[iChain].core->at(idet)[isig];
-      aps.opulse[NSegCore-1][isig] = tmpamp/simeng[0];
+      double tmpamp = obj[iChain].spulse->at(idet)[iseg*NSig+isig];
+      aps.opulse[iseg][isig] = tmpamp/simeng[0];
     }
+  }
+
+  // read core
+  for(int isig=0; isig<NSig; isig++){
+    double tmpamp = obj[iChain].core->at(idet)[isig];
+    aps.opulse[NSegCore-1][isig] = tmpamp/simeng[0];
+  }
 #endif
 
 #ifdef NOISE
-    if(nidx>=0){
-      // add noise
-      for(int iseg=0; iseg<NSegCore; iseg++){
-	for(int isig=0; isig<NSig; isig++){
-	  nidx = nidx%NOISE;
-	  aps.opulse[iseg][isig] += noise[nidx]/simeng[0];
-	  nidx++;
-	}
-	nidx+=nidxshift;
+  if(nidx>=0){
+    // add noise
+    for(int iseg=0; iseg<NSegCore; iseg++){
+      for(int isig=0; isig<NSig; isig++){
+	nidx = nidx%NOISE;
+	aps.opulse[iseg][isig] += noise[nidx]/simeng[0];
+	nidx++;
       }
+      nidx+=nidxshift;
     }
+  }
 #endif
 
-  }
-  
   return aps;
 }
 
