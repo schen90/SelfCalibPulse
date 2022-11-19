@@ -49,7 +49,7 @@ void swap(vector<int> &v, int m, int l){
   v[l] = temp;
 }
 
-void MakeDataG4_noPS(string G4inputfile, string outputfile){
+void MakeDataG4_noPS(string G4inputfile, string outputfile, int mult = 1){
 
   gInterpreter->GenerateDictionary("vector<vector<int>>","vector");
   gInterpreter->GenerateDictionary("vector<vector<float>>","vector");
@@ -202,7 +202,8 @@ void MakeDataG4_noPS(string G4inputfile, string outputfile){
   time_t start, stop;
   time(&start);
 
-  int mult = 1;
+  //int mult = 1;
+  cout<<"mult = "<<mult<<endl;
   int counter=0;
   int readflag = 0;
   int iff, nprev;
@@ -444,12 +445,14 @@ void MakeDataG4_noPS(string G4inputfile, string outputfile){
 #ifndef __CINT__
 int main(int argc, char *argv[]){
 
-  if(argc>2){
-    MakeDataG4_noPS( string(argv[1]), string(argv[2]) );
+  if(argc>3){
+    MakeDataG4_noPS( string(argv[1]), string(argv[2]), atoi(argv[3]) );
+  }else if(argc>2){
+    MakeDataG4_noPS( string(argv[1]), string(argv[2]), 1 );
   }else if(argc>1){
-    MakeDataG4_noPS( string(argv[1]), "rootfiles/noPS/G4SimData0000.root" );
+    MakeDataG4_noPS( string(argv[1]), "rootfiles/noPS/G4SimData0000.root", 1 );
   }else{
-    MakeDataG4_noPS( "trunk/GammaEvents.0000", "rootfiles/noPS/G4SimData0000.root" );
+    MakeDataG4_noPS( "trunk/GammaEvents.0000", "rootfiles/noPS/G4SimData0000.root", 1 );
   }
 
   return 0;
