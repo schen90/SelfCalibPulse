@@ -239,21 +239,20 @@ int main(int argc, char* argv[]){
       ndiv++;
     }
 
+    time(&stepstart);
+    if(kConfig) treereader->GenerateHCs(3,agata);
+    if(kConfig) agata->CalcDevSigma();
+    time(&stepstop);
+    printf("=== FindDevSigma time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
     
     // remove strange PS from PSC
     int nremove = 0;
     bool kRemove = true;
-    while(kRemove){
+    while(kRemove && nremove<0){
       cout<<"\033[1;31m"<<"Remove strange PS "<<nremove<<": \033[0m"<<endl;
       if(nremove<2) agata->SetNSigma(2.);
       else          agata->SetNSigma(3.);
       
-      time(&stepstart);
-      if(kConfig) treereader->GenerateHCs(3,agata);
-      if(kConfig) agata->CalcDevSigma();
-      time(&stepstop);
-      printf("=== FindDevSigma time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-
       time(&stepstart);
       if(kConfig) agata->MakeCPulse();
       if(kConfig) treereader->GenerateHCs(4,agata);
@@ -274,6 +273,13 @@ int main(int argc, char* argv[]){
 	  <<" ; nPSC = "<<PSCstat[1]
 	  <<" ; nEmpty = "<<PSCstat[2]
 	  <<"\033[0m"<<endl<<endl;
+
+      time(&stepstart);
+      if(kConfig) treereader->GenerateHCs(3,agata);
+      if(kConfig) agata->CalcDevSigma();
+      time(&stepstop);
+      printf("=== FindDevSigma time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
       nremove++;
     }
 
