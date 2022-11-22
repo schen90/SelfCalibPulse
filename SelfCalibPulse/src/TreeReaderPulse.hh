@@ -83,8 +83,9 @@ private:
   atomic_int cNotMatch;
 
   int nConfig = 0;
-  vector<float> fSourceE;
-  vector<TVector3> fSourcePos;
+  vector<int>              NSource;
+  vector<vector<float>>    fSourceE;
+  vector<vector<TVector3>> fSourcePos;
   vector<string> path;
   vector<int> MinRun;
   vector<int> MaxRun;
@@ -92,8 +93,8 @@ private:
 
   Double_t MaxMemUsage = 50; // max memory usage %
 
-  float SourceE;
-  TVector3 SourcePos;
+  vector<float> SourceE;
+  vector<TVector3> SourcePos;
   
   struct OBJ{
     // Declaration of leaf types

@@ -484,8 +484,11 @@ void AGATA::WriteEvtHitsfiles(int detid){
   int            noiseidx;
   int            noiseidxshift;
 #endif
-  Float_t        sourcepos[3];
-  Float_t        sourceeng;
+  int            nsource;
+  vector<float>  sourcex;
+  vector<float>  sourcey;
+  vector<float>  sourcez;
+  vector<float>  sourceeng;
 
   for(ievt=0; ievt<fEventHits->size(); ievt++){ // loop events
     EventHits *fEvent = fEventHits->at(ievt);
@@ -519,17 +522,29 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("noiseidx",&noiseidx);
 	htree[idet]->Branch("noiseidxshift",&noiseidxshift);
 #endif
-	htree[idet]->Branch("sourcepos",sourcepos,"sourcepos[3]/F");
-	htree[idet]->Branch("sourceeng",&sourceeng,"sourceeng/F");
+	htree[idet]->Branch("nsource",&nsource);
+	htree[idet]->Branch("sourcex",&sourcex);
+	htree[idet]->Branch("sourcey",&sourcey);
+	htree[idet]->Branch("sourcez",&sourcez);
+	htree[idet]->Branch("sourceeng",&sourceeng);
       }
     }
 
-    TVector3 SourcePos = fEvent->GetSourcePos();
-    sourcepos[0] = SourcePos.X();
-    sourcepos[1] = SourcePos.Y();
-    sourcepos[2] = SourcePos.Z();
-    sourceeng = fEvent->GetSourceE();
+    sourcex.clear(); sourcex.shrink_to_fit();
+    sourcey.clear(); sourcey.shrink_to_fit();
+    sourcez.clear(); sourcez.shrink_to_fit();
+    sourceeng.clear(); sourceeng.shrink_to_fit();
 
+    nsource = fEvent->GetNSource();
+    for(int is=0; is<nsource; is++){
+      TVector3 SourcePos = fEvent->GetSourcePos(is);
+      sourcex.push_back(SourcePos.X());
+      sourcey.push_back(SourcePos.Y());
+      sourcez.push_back(SourcePos.Z());
+      float tmpeng = fEvent->GetSourceE(is);
+      sourceeng.push_back(tmpeng);
+    }
+    
     // get fHit information
     vector<Hit*>* fHits = fEvent->GetfHits();
     for(Hit *ah : *fHits){
@@ -591,7 +606,11 @@ void AGATA::Load(string configfile){
   while(!fin.eof()){
     fin.getline(buffer,500);
     if(strncmp(buffer,"#input",6)==0){
-      fin >> buffer >> sE >> spos[0] >> spos[1] >> spos[2];
+      int nsource = 0;
+      fin >> buffer >> nsource;
+      for(int i=0; i<nsource; i++){
+	fin >> buffer >> sE >> spos[0] >> spos[1] >> spos[2];
+      }
       fin >> buffer >> pathtmp;
       fin >> buffer >> run[0] >> run[1];
       fin >> buffer >> nevt;
@@ -643,8 +662,11 @@ void AGATA::CombEvtHitsfiles(){
     int          inoiseidx;
     int          inoiseidxshift;
 #endif
-    float        isourcepos[3];
-    float        isourceeng;
+    int            insource;
+    vector<float> *isourcex = 0;
+    vector<float> *isourcey = 0;
+    vector<float> *isourcez = 0;
+    vector<float> *isourceeng = 0;
   };
 
   OBJ obj[MaxNDets];
@@ -713,7 +735,10 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("noiseidx",      &obj[detid].inoiseidx);
 	htree[detid]->SetBranchAddress("noiseidxshift", &obj[detid].inoiseidxshift);
 #endif
-	htree[detid]->SetBranchAddress("sourcepos",      obj[detid].isourcepos);
+	htree[detid]->SetBranchAddress("nsource",       &obj[detid].insource);
+	htree[detid]->SetBranchAddress("sourcex",       &obj[detid].isourcex);
+	htree[detid]->SetBranchAddress("sourcey",       &obj[detid].isourcey);
+	htree[detid]->SetBranchAddress("sourcez",       &obj[detid].isourcez);
 	htree[detid]->SetBranchAddress("sourceeng",     &obj[detid].isourceeng);
 
 	htree[detid]->GetEntry(Nevts[detid]-1);
@@ -734,8 +759,11 @@ void AGATA::CombEvtHitsfiles(){
       int            onoiseidx;
       int            onoiseidxshift;
 #endif
-      Float_t        osourcepos[3];
-      Float_t        osourceeng;
+      int            onsource;
+      vector<float>  osourcex;
+      vector<float>  osourcey;
+      vector<float>  osourcez;
+      vector<float>  osourceeng;
       htreeall = new TTree("tree",Form("tree for Hits in config%d run%d alldet",iconfig,irun));
       htreeall->Branch("iconfig",&oconfig);
       htreeall->Branch("irun",&orun);
@@ -751,8 +779,11 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("noiseidx",&onoiseidx);
       htreeall->Branch("noiseidxshift",&onoiseidxshift);
 #endif
-      htreeall->Branch("sourcepos",osourcepos,"sourcepos[3]/F");
-      htreeall->Branch("sourceeng",&osourceeng,"sourceeng/F");
+      htreeall->Branch("nsource",&onsource);
+      htreeall->Branch("sourcex",&osourcex);
+      htreeall->Branch("sourcey",&osourcey);
+      htreeall->Branch("sourcez",&osourcez);
+      htreeall->Branch("sourceeng",&osourceeng);
 
       for(int iety=0; iety<MaxEntry; iety++){ // loop entries
 
@@ -778,11 +809,19 @@ void AGATA::CombEvtHitsfiles(){
 	      onoiseidx = obj[detid].inoiseidx;
 	      onoiseidxshift = obj[detid].inoiseidxshift;
 #endif
-	      for(int ix=0; ix<3; ix++) osourcepos[ix] = obj[detid].isourcepos[ix];
-	      osourceeng = obj[detid].isourceeng;
+	      onsource = obj[detid].insource;
+	      for(float x : *obj[detid].isourcex) osourcex.push_back(x);
+	      for(float y : *obj[detid].isourcey) osourcey.push_back(y);
+	      for(float z : *obj[detid].isourcez) osourcez.push_back(z);
+
+	      for(float eng : *obj[detid].isourceeng) osourceeng.push_back(eng);
 	    
 	      htreeall->Fill();
 	      ovhcid.clear();
+	      osourcex.clear();
+	      osourcey.clear();
+	      osourcez.clear();
+	      osourceeng.clear();
 	    }
 
 	    // move to next idx
@@ -812,251 +851,6 @@ void AGATA::CombEvtHitsfiles(){
 }
 
 
-void AGATA::LoadEvtHitsfiles(int iconfig){
-
-  //------------------------------------------------
-  // Hit
-  //------------------------------------------------
-  TFile *hfile[MaxNDets];
-  TTree *htree[MaxNDets];
-
-  struct OBJ{
-    //int          iconfig;
-    //int          irun;
-    int          ientry;
-    int          idet;
-    int          iseg;
-    int          iinterid;
-    vector<int> *ihcid = 0;
-    float        idepE;
-    float        icalpos[3];
-    float        ilabpos[3];
-#ifdef NOISE
-    int          inoiseidx;
-    int          inoiseidxshift;
-#endif
-    float        isourcepos[3];
-    float        isourceeng;
-  };
-
-  OBJ obj[MaxNDets];
-
-  string hfilename0;
-  bool kempty;
-  int idx[MaxNDets], Nevts[MaxNDets];
-
-  // check exist
-  hfilename0 = (string) Form("./share/Hits/input%d",iconfig);
-  if(gSystem->AccessPathName(hfilename0.c_str())) return;
-
-  int irun;  
-  for(; atomrun<MaxRun[iconfig]+1;){ // loop runs 
-
-    {
-#ifdef NTHREADS
-      lock_guard<mutex> lock(EvtHitsmtx);
-#endif
-      if(atomrun<MaxRun[iconfig]+1){
-	irun = atomrun;
-	atomrun++;
-      }else{
-	continue;
-      }
-    }
-    
-    // check exist
-    hfilename0 = (string) Form("./share/Hits/input%d/run%04d",iconfig,irun);
-    kempty = true;
-    for(int detid=0; detid<NDets; detid++){
-      string hfilename = (string) Form("%s_det%04d.root",hfilename0.c_str(),detid);
-      if(gSystem->AccessPathName(hfilename.c_str())){
-	idx[detid] = -1;
-      }else{
-	idx[detid] = 0;
-	hfile[detid] = new TFile(hfilename.c_str());
-	kempty = false;
-      }
-    }
-
-    if(kempty) continue;
-
-    // load hits from iconfig, irun
-    cout<<"\r \e[1;33m Load Hits from "<<hfilename0<<"... \e[0m"<<flush;
-
-    int MaxEntry = -1;
-    for(int detid=0; detid<NDets; detid++){
-
-      if(idx[detid]<0){ 
-	cerr<<"iconfig "<<iconfig<<" irun "<<irun<<" detid "<<detid<<" not exist!!!!"<<endl; 
-	continue;
-      }
-
-      htree[detid] = (TTree *)hfile[detid]->Get("tree");
-      Nevts[detid] = htree[detid]->GetEntriesFast();
-	
-      //htree[detid]->SetBranchAddress("iconfig",       &obj[detid].iconfig);
-      //htree[detid]->SetBranchAddress("irun",          &obj[detid].irun);
-      htree[detid]->SetBranchAddress("ientry",        &obj[detid].ientry);
-      htree[detid]->SetBranchAddress("det",           &obj[detid].idet);
-      htree[detid]->SetBranchAddress("seg",           &obj[detid].iseg);
-      htree[detid]->SetBranchAddress("interid",       &obj[detid].iinterid);
-      htree[detid]->SetBranchAddress("hcid",          &obj[detid].ihcid);
-      htree[detid]->SetBranchAddress("depE",          &obj[detid].idepE);
-      htree[detid]->SetBranchAddress("calpos",         obj[detid].icalpos);
-      htree[detid]->SetBranchAddress("labpos",         obj[detid].ilabpos);
-#ifdef NOISE
-      htree[detid]->SetBranchAddress("noiseidx",      &obj[detid].inoiseidx);
-      htree[detid]->SetBranchAddress("noiseidxshift", &obj[detid].inoiseidxshift);
-#endif
-      htree[detid]->SetBranchAddress("sourcepos",      obj[detid].isourcepos);
-      htree[detid]->SetBranchAddress("sourceeng",     &obj[detid].isourceeng);
-
-      htree[detid]->GetEntry(Nevts[detid]-1);
-      if(obj[detid].ientry>MaxEntry) MaxEntry=obj[detid].ientry;
-
-      htree[detid]->GetEntry(idx[detid]);
-    }
-
-    MaxEntry += 1;
-    if(MaxEntry>0) NevtsTotal += MaxEntry;
-      
-    vector<int>            vdet;
-    vector<int>            vseg;
-    vector<int>            vinterid;
-    vector<vector<int>>    vhcid;
-    vector<float>          vdepE;
-    vector<vector<double>> vcalpos;
-    vector<vector<double>> vlabpos;
-#ifdef NOISE
-    vector<int>            vnoiseidx;
-    vector<int>            vnoiseidxshift;
-#endif
-    Float_t                sourcepos[3];
-    Float_t                sourceeng;
-
-    for(int iety=0; iety<MaxEntry; iety++){ // loop entries
-      //if(iety%10==0) cout<<"\r ientry = "<<iety<<flush;
-      vdet.clear();
-      vseg.clear();
-      vinterid.clear();
-      vhcid.clear();
-      vdepE.clear();
-      vcalpos.clear();
-      vlabpos.clear();
-#ifdef NOISE
-      vnoiseidx.clear();
-      vnoiseidxshift.clear();
-#endif
-
-      // find hits belong to the same entry
-      for(int detid=0; detid<NDets; detid++){
-
-	if(idx[detid]<0) continue;
-
-	int imove=0;
-	while(obj[detid].ientry<iety){
-	  imove++;
-	  // move to next idx
-	  idx[detid]++;
-	  if(idx[detid]>=Nevts[detid]) break;
-	  htree[detid]->GetEntry(idx[detid]);
-	}
-	if(imove>1){ cout<<"move "<<imove<<" times!!!"<<endl;}
-
-
-	if(iety==obj[detid].ientry){
-
-	  vdet.push_back(obj[detid].idet);
-	  vseg.push_back(obj[detid].iseg);
-	  vinterid.push_back(obj[detid].iinterid);
-	  vhcid.push_back(*obj[detid].ihcid);
-	  vdepE.push_back(obj[detid].idepE);
-
-	  vector<double> tmppos1(3);
-	  for(int ix=0; ix<3; ix++) tmppos1[ix]=obj[detid].icalpos[ix];
-	  vcalpos.push_back(tmppos1);
-
-	  vector<double> tmppos2(3);
-	  for(int ix=0; ix<3; ix++) tmppos2[ix]=obj[detid].ilabpos[ix];
-	  vlabpos.push_back(tmppos2);
-
-#ifdef NOISE
-	  vnoiseidx.push_back(obj[detid].inoiseidx);
-	  vnoiseidxshift.push_back(obj[detid].inoiseidxshift);
-#endif
-	    
-	  for(int ix=0; ix<3; ix++) sourcepos[ix]=obj[detid].isourcepos[ix];
-	  sourceeng = obj[detid].isourceeng;
-
-	}
-
-      }
-
-
-      // make EventHits
-      float SourceE = sourceeng;
-      TVector3 SourcePos(sourcepos[0],sourcepos[1],sourcepos[2]);
-      EventHits* fEvent = new EventHits(SourceE, SourcePos);
-      fEvent->SetIdx(iconfig,irun,iety);
-
-      for(int i=0; i<vdet.size(); i++){
-	int detid = vdet[i];
-	int segid = vseg[i];
-	int interid = vinterid[i];
-	
-	float depE = vdepE[i]; // keV
-	TVector3 initpos(vcalpos[i][0],vcalpos[i][1],vcalpos[i][2]); // mm
-	TVector3 hitpos(vlabpos[i][0],vlabpos[i][1],vlabpos[i][2]); // mm
-
-	Hit *ahit = new Hit(detid, segid, depE, hitpos, initpos);
-	ahit->SetInterid(interid);
-	
-#ifdef NOISE
-	ahit->SetNoiseIdx(vnoiseidx[i]);
-	ahit->SetNoiseIdxShift(vnoiseidxshift[i]);
-#endif
-	fEvent->Add(ahit);
-	cHits++;
-
-	
-#ifdef NTHREADS
-	lock_guard<mutex> lock(PSCmtx[detid][segid]);
-#endif
-	// connect with HCs
-	for(int ii=0; ii<vhcid[i].size(); ii++){
-	  int pscid = vhcid[i][ii];
-	  if( pscid > HCstat[detid][segid][1] ){
-	    cerr<<"pscid = "<<pscid<<" outside fHCs["<<detid<<"]["<<segid<<"] range!!!!"<<endl;
-	    continue;
-	  }
-
-	  int ipsc = FindHC(detid, segid, pscid);
-	  HitCollection *ahc = fHCs[detid][segid]->at(ipsc);
-	  ahc->AddHit(ahit);
-	  ahit->AddHitCollection(ahc);
-	}
-      
-      }
-
-#ifdef NTHREADS
-      lock_guard<mutex> lock(EvtHitsmtx);
-#endif
-      fEventHits->push_back(fEvent);
-      ievt++;
-
-    } // end of loop entries
-
-    for(int detid=0; detid<NDets; detid++){
-      if(idx[detid]<0) continue;
-      hfile[detid]->Close();
-    }
-      
-  } // end of loop runs
-
-  return;
-}
-
-
 void AGATA::LoadEvtHitsfiles2(int iconfig){
 
   //------------------------------------------------
@@ -1080,8 +874,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     int          inoiseidx;
     int          inoiseidxshift;
 #endif
-    float        isourcepos[3];
-    float        isourceeng;
+    int            insource;
+    vector<float> *isourcex = 0;
+    vector<float> *isourcey = 0;
+    vector<float> *isourcez = 0;
+    vector<float> *isourceeng = 0;
   };
 
   OBJ obj;
@@ -1146,7 +943,10 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     htree->SetBranchAddress("noiseidx",      &obj.inoiseidx);
     htree->SetBranchAddress("noiseidxshift", &obj.inoiseidxshift);
 #endif
-    htree->SetBranchAddress("sourcepos",      obj.isourcepos);
+    htree->SetBranchAddress("nsource",       &obj.insource);
+    htree->SetBranchAddress("sourcex",       &obj.isourcex);
+    htree->SetBranchAddress("sourcey",       &obj.isourcey);
+    htree->SetBranchAddress("sourcez",       &obj.isourcez);
     htree->SetBranchAddress("sourceeng",     &obj.isourceeng);
 
     htree->GetEntry(Nevts-1);
@@ -1166,8 +966,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<int>            vnoiseidx;
     vector<int>            vnoiseidxshift;
 #endif
-    Float_t                sourcepos[3];
-    Float_t                sourceeng;
+    int                    nsource;
+    vector<float>          sourcex;
+    vector<float>          sourcey;
+    vector<float>          sourcez;
+    vector<float>          sourceeng;
 
     idx = 0;
     for(int iety=0; iety<MaxEntry; iety++){ // loop entries
@@ -1183,6 +986,10 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       vnoiseidx.clear();
       vnoiseidxshift.clear();
 #endif
+      sourcex.clear();
+      sourcey.clear();
+      sourcez.clear();
+      sourceeng.clear();
 
       // find hits belong to the same entry
       for(; idx<Nevts; idx++){
@@ -1210,9 +1017,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	  vnoiseidx.push_back(obj.inoiseidx);
 	  vnoiseidxshift.push_back(obj.inoiseidxshift);
 #endif
-	    
-	  for(int ix=0; ix<3; ix++) sourcepos[ix]=obj.isourcepos[ix];
-	  sourceeng = obj.isourceeng;
+	  nsource = obj.insource;
+	  sourcex = *obj.isourcex;
+	  sourcey = *obj.isourcey;
+	  sourcez = *obj.isourcez;
+	  sourceeng = *obj.isourceeng;
 
 	}
 
@@ -1220,8 +1029,12 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 
 
       // make EventHits
-      float SourceE = sourceeng;
-      TVector3 SourcePos(sourcepos[0],sourcepos[1],sourcepos[2]);
+      vector<float> SourceE;
+      vector<TVector3> SourcePos;
+      for(int is=0; is<nsource; is++){
+	SourceE.push_back(sourceeng[is]);
+	SourcePos.push_back(TVector3(sourcex[is],sourcey[is],sourcez[is]));
+      }
       EventHits* fEvent = new EventHits(SourceE, SourcePos);
       fEvent->SetIdx(iconfig,irun,iety);
 
@@ -1577,6 +1390,7 @@ int AGATA::AddPS(PS *aps, Hit *ahit){
   }
   return tmp;
 }
+
 
 int AGATA::AddPStoPSC(PS *aps, Hit *ahit, int ipsc){
   
@@ -2439,8 +2253,8 @@ void AGATA::TrackingLoop(){
 
     // get Hits for ievt
     vector<Hit*>* fHits;
-    TVector3 sourcepos; // mm
-    Double_t EGamma; // keV
+    vector<TVector3> sourcepos; // mm
+    vector<float> EGamma; // keV
     {
 #ifdef NTHREADS2
       lock_guard<mutex> lock(EvtHitsmtx);
@@ -2469,8 +2283,12 @@ void AGATA::TrackingLoop(){
 
       if(ievt>=Nevts) continue;
       fHits = fEventHits->at(ievt)->GetfHits();
-      sourcepos = fEventHits->at(ievt)->GetSourcePos();
-      EGamma = fEventHits->at(ievt)->GetSourceE();
+      sourcepos.clear();  EGamma.clear();
+      int nsource = fEventHits->at(ievt)->GetNSource();
+      for(int is=0; is<nsource; is++){
+	sourcepos.push_back(fEventHits->at(ievt)->GetSourcePos(is));
+	EGamma.push_back(fEventHits->at(ievt)->GetSourceE(is));
+      }
       ievt++;
     }
 
@@ -2478,17 +2296,32 @@ void AGATA::TrackingLoop(){
     for(Hit* ahit : *fHits) ahit->CalcAveHCsPosition(0);
 
     // tracking
-    Tracker tracker(fHits, EGamma, sourcepos);
-    //tracker.OFTtracking();
-    tracker.Simpletracking();
-    vector<int> atrack = tracker.GetTrack();
-
+    int nsource = EGamma.size();
+    vector<int> atrack;
+    int bestis = 0;
+    double minchi2 = 1e9;
+    for(int is=0; is<nsource; is++){
+      Tracker tracker(fHits, EGamma[is], sourcepos[is]);
+      //tracker.OFTtracking();
+      tracker.Simpletracking();
+      double tmpchi2 = tracker.CalcChi2();
+      if(tmpchi2>0 && tmpchi2<minchi2){
+	bestis = is;
+	minchi2 = tmpchi2;
+	atrack = tracker.GetTrack();
+      }
+    }
+    
 #ifdef TRACKINGTREE
     if(atrack.size()>1){
+      Tracker tracker(fHits, EGamma[bestis], sourcepos[bestis]);
+      tracker.Simpletracking();
+
       lock_guard<mutex> lock(Trtreemtx);
       Trnhits = atrack.size();
       TrSource = true;
-      TrSourcePos[0] = sourcepos.X();  TrSourcePos[1] = sourcepos.Y();  TrSourcePos[2] = sourcepos.Z();
+      TrSourceE = EGamma[bestis];
+      TrSourcePos[0] = sourcepos[bestis].X();  TrSourcePos[1] = sourcepos[bestis].Y();  TrSourcePos[2] = sourcepos[bestis].Z();
       TrCorrect = tracker.CheckOrder();
       TrFOM1 = tracker.GetFOM1();
       TrFOM2 = tracker.GetFOM2();
@@ -2499,10 +2332,10 @@ void AGATA::TrackingLoop(){
     // make paths
     if(atrack.size()>1){ // at least two hits
       int ngoodhit = 0;
-      double incE = EGamma;
+      double incE = EGamma[bestis];
       double depE = fHits->at(atrack[0])->GetE(); // keV
 
-      Hit *sourcehit = new Hit(sourcepos);
+      Hit *sourcehit = new Hit(sourcepos[bestis]);
       sourcehit->SetInterid(-1);
 #ifdef NTHREADS2
       lock_guard<mutex> lock(Pathsmtx);
@@ -2574,6 +2407,7 @@ void AGATA::Tracking(int iter){
   Trfile = new TFile(Form("share/Trtree%d.root",iter),"RECREATE");
   Trtree = new TTree("tree","tracking results");
   Trtree->Branch("nhits",&Trnhits);
+  Trtree->Branch("sourceE",&TrSourceE);
   Trtree->Branch("source",&TrSource);
   Trtree->Branch("sourcepos",TrSourcePos,"sourcepos[3]/F");
   Trtree->Branch("correct",&TrCorrect);

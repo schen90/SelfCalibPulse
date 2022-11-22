@@ -54,7 +54,6 @@ public:
   void WriteEvtHitsfiles(int detid);
   void Load(string configfile);
   void CombEvtHitsfiles();
-  void LoadEvtHitsfiles(int iconfig);
   void LoadEvtHitsfiles2(int iconfig);
   void LoadEvtHitsconfigs();
   void ClearEvtHitsMem(); // clear EventHits in memory
@@ -177,6 +176,7 @@ private:
   TTree *Trtree;
   int  Trnhits;
   bool TrSource;  // if start from source
+  float TrSourceE;
   float TrSourcePos[3];
   bool TrCorrect;
   double TrFOM1;

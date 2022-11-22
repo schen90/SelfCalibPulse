@@ -66,13 +66,22 @@ void TreeReaderPulse::Load(string configfile){
   while(!fin.eof()){
     fin.getline(buffer,500);
     if(strncmp(buffer,"#input",6)==0){
-      fin >> buffer >> sE >> spos[0] >> spos[1] >> spos[2];
+      int nsource = 0;
+      vector<float>    tmpSE;
+      vector<TVector3> tmpSPos;
+      fin >> buffer >> nsource;
+      for(int i=0; i<nsource; i++){
+	fin >> buffer >> sE >> spos[0] >> spos[1] >> spos[2];
+	tmpSE.push_back(sE);
+	tmpSPos.push_back(TVector3(spos[0],spos[1],spos[2]));
+      }
       fin >> buffer >> pathtmp;
       fin >> buffer >> run[0] >> run[1];
       fin >> buffer >> nevt;
 
-      fSourceE.push_back(sE);
-      fSourcePos.push_back(TVector3(spos[0],spos[1],spos[2]));
+      NSource.push_back(nsource);
+      fSourceE.push_back(tmpSE);
+      fSourcePos.push_back(tmpSPos);
       path.push_back(pathtmp);
       MinRun.push_back(run[0]);
       MaxRun.push_back(run[1]);
@@ -90,11 +99,12 @@ void TreeReaderPulse::Load(string configfile){
   
   cout<<"\e[1;33m find "<<nConfig<<" inputs:\e[0m"<<endl;
   for(int i=0; i<nConfig; i++){
-    cout<<"#input "<<i<<": "
-	<<Form("source %.1fkeV at %.2f %.2f %.2f",
-	       fSourceE[i],
-	       fSourcePos[i].X(),fSourcePos[i].Y(),fSourcePos[i].Z())
-	<<endl;
+    cout<<"#input "<<i<<":  "<<NSource[i]<<" sources"<<endl;
+    for(int is=0; is<NSource[i]; is++){
+      cout<<Form("     source %.1fkeV at %.2f %.2f %.2f",
+		 fSourceE[i][is],
+		 fSourcePos[i][is].X(),fSourcePos[i][is].Y(),fSourcePos[i][is].Z())<<endl;
+    }
 
     for(int run=MinRun[i]; run<=MaxRun[i]; run++){
       fChain[0]->AddFile(Form("%s/G4SimData%04d.root",path[i].c_str(),run),0,"tree");
@@ -113,8 +123,8 @@ void TreeReaderPulse::Load(string configfile){
   }
   Init(0);
 
-  SourceE = fSourceE[0];
-  SourcePos= fSourcePos[0];
+  SourceE   = fSourceE[0];
+  SourcePos = fSourcePos[0];
 }
 
 void TreeReaderPulse::ScanPS(AGATA *agata, long long nevts){
@@ -1017,9 +1027,20 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
   
 #ifdef CHECKTRACK
   // check track----------------------------------------------
-  Tracker tracker(fHits, (Double_t)SourceE, SourcePos);
-  tracker.OFTtracking();
-  vector<int> atrack = tracker.GetTrack();
+  int nsource = SourceE.size();
+  vector<int> atrack;
+  int bestis = 0;
+  double minchi2 = 1e9;
+  for(int is=0; is<nsource; is++){
+    Tracker tracker(fHits, SourceE[is], SourcePos[is]);
+    tracker.OFTtracking();
+    double tmpchi2 = tracker.CalcChi2();
+    if(tmpchi2>0 && tmpchi2<minchi2){
+      bestis = is;
+      minchi2 = tmpchi2;
+      atrack = tracker.GetTrack();
+    }
+  }
   for(int i=0; i<fPS.size(); i++) uflag[i] = 0;
   if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
 #endif
@@ -1146,9 +1167,20 @@ void TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain,
 
 #ifdef CHECKTRACK
   // check track----------------------------------------------
-  Tracker tracker(fHits, (Double_t)SourceE, SourcePos);
-  tracker.OFTtracking();
-  vector<int> atrack = tracker.GetTrack();
+  int nsource = SourceE.size();
+  vector<int> atrack;
+  int bestis = 0;
+  double minchi2 = 1e9;
+  for(int is=0; is<nsource; is++){
+    Tracker tracker(fHits, SourceE[is], SourcePos[is]);
+    tracker.OFTtracking();
+    double tmpchi2 = tracker.CalcChi2();
+    if(tmpchi2>0 && tmpchi2<minchi2){
+      bestis = is;
+      minchi2 = tmpchi2;
+      atrack = tracker.GetTrack();
+    }
+  }
   for(int i=0; i<fHits->size(); i++) uflag[i] = 0;
   if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
 #endif
