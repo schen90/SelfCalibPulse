@@ -2327,6 +2327,7 @@ void AGATA::TrackingLoop(){
 #ifdef TRACKINGTREE
     if(atrack.size()>1){
       Tracker tracker(fHits, EGamma[bestis], sourcepos[bestis]);
+      //tracker.OFTtracking();
       tracker.Simpletracking();
 
       lock_guard<mutex> lock(Trtreemtx);
