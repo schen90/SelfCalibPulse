@@ -1025,8 +1025,6 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
   long long iEvtHit = agata->AddEventHits(fEvent);
   vector<Hit*>* fHits = fEvent->GetfHits();
   
-#ifdef CHECKTRACK
-  // check track----------------------------------------------
   int nsource = SourceE.size();
   vector<int> atrack;
   int bestis = 0;
@@ -1041,6 +1039,10 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
       atrack = tracker.GetTrack();
     }
   }
+  fEvent->SetBestis(bestis);
+  
+#ifdef CHECKTRACK
+  // check track----------------------------------------------
   for(int i=0; i<fPS.size(); i++) uflag[i] = 0;
   if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
 #endif

@@ -489,6 +489,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
   vector<float>  sourcey;
   vector<float>  sourcez;
   vector<float>  sourceeng;
+  int            bestis;
 
   for(ievt=0; ievt<fEventHits->size(); ievt++){ // loop events
     EventHits *fEvent = fEventHits->at(ievt);
@@ -527,6 +528,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("sourcey",&sourcey);
 	htree[idet]->Branch("sourcez",&sourcez);
 	htree[idet]->Branch("sourceeng",&sourceeng);
+	htree[idet]->Branch("bestis",&bestis);
       }
     }
 
@@ -544,6 +546,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
       float tmpeng = fEvent->GetSourceE(is);
       sourceeng.push_back(tmpeng);
     }
+    bestis = fEvent->GetBestis();
     
     // get fHit information
     vector<Hit*>* fHits = fEvent->GetfHits();
@@ -667,6 +670,7 @@ void AGATA::CombEvtHitsfiles(){
     vector<float> *isourcey = 0;
     vector<float> *isourcez = 0;
     vector<float> *isourceeng = 0;
+    int            ibestis;
   };
 
   OBJ obj[MaxNDets];
@@ -740,6 +744,7 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("sourcey",       &obj[detid].isourcey);
 	htree[detid]->SetBranchAddress("sourcez",       &obj[detid].isourcez);
 	htree[detid]->SetBranchAddress("sourceeng",     &obj[detid].isourceeng);
+	htree[detid]->SetBranchAddress("bestis",        &obj[detid].ibestis);
 
 	htree[detid]->GetEntry(Nevts[detid]-1);
 	if(obj[detid].ientry>MaxEntry) MaxEntry=obj[detid].ientry;
@@ -764,6 +769,7 @@ void AGATA::CombEvtHitsfiles(){
       vector<float>  osourcey;
       vector<float>  osourcez;
       vector<float>  osourceeng;
+      int            obestis;
       htreeall = new TTree("tree",Form("tree for Hits in config%d run%d alldet",iconfig,irun));
       htreeall->Branch("iconfig",&oconfig);
       htreeall->Branch("irun",&orun);
@@ -784,6 +790,7 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("sourcey",&osourcey);
       htreeall->Branch("sourcez",&osourcez);
       htreeall->Branch("sourceeng",&osourceeng);
+      htreeall->Branch("bestis",&obestis);
 
       for(int iety=0; iety<MaxEntry; iety++){ // loop entries
 
@@ -813,9 +820,9 @@ void AGATA::CombEvtHitsfiles(){
 	      for(float x : *obj[detid].isourcex) osourcex.push_back(x);
 	      for(float y : *obj[detid].isourcey) osourcey.push_back(y);
 	      for(float z : *obj[detid].isourcez) osourcez.push_back(z);
-
 	      for(float eng : *obj[detid].isourceeng) osourceeng.push_back(eng);
-	    
+	      obestis = obj[detid].ibestis;
+	      
 	      htreeall->Fill();
 	      ovhcid.clear();
 	      osourcex.clear();
@@ -879,6 +886,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<float> *isourcey = 0;
     vector<float> *isourcez = 0;
     vector<float> *isourceeng = 0;
+    int            ibestis;
   };
 
   OBJ obj;
@@ -948,6 +956,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     htree->SetBranchAddress("sourcey",       &obj.isourcey);
     htree->SetBranchAddress("sourcez",       &obj.isourcez);
     htree->SetBranchAddress("sourceeng",     &obj.isourceeng);
+    htree->SetBranchAddress("bestis",        &obj.ibestis);
 
     htree->GetEntry(Nevts-1);
     MaxEntry=obj.ientry;
@@ -971,6 +980,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<float>          sourcey;
     vector<float>          sourcez;
     vector<float>          sourceeng;
+    int                    bestis;
 
     idx = 0;
     for(int iety=0; iety<MaxEntry; iety++){ // loop entries
@@ -1022,6 +1032,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	  sourcey = *obj.isourcey;
 	  sourcez = *obj.isourcez;
 	  sourceeng = *obj.isourceeng;
+	  bestis = obj.ibestis;
 
 	}
 
@@ -1037,7 +1048,8 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       }
       EventHits* fEvent = new EventHits(SourceE, SourcePos);
       fEvent->SetIdx(iconfig,irun,iety);
-
+      fEvent->SetBestis(bestis);
+      
       for(int i=0; i<vdet.size(); i++){
 	int detid = vdet[i];
 	int segid = vseg[i];
@@ -1497,10 +1509,10 @@ void AGATA::FindDevCut(){
 
 	    }else{
 	      int ncut;
-	      ncut = (int)(0.6*nsize); // 0.5
+	      ncut = (int)(0.5*nsize); // 0.5
 	      apsc->devabscut[is][0] = apsc->devabs[is][ncut];
 
-	      ncut = (int)(0.45*nsize); // 0.5
+	      ncut = (int)(0.5*nsize); // 0.5
 	      apsc->devabscut[is][1] = apsc->devabs[is][ncut];
 	    }
 	  }
