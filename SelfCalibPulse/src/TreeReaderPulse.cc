@@ -1031,8 +1031,8 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
   double minchi2 = 1e9;
   for(int is=0; is<nsource; is++){
     Tracker tracker(fHits, SourceE[is], SourcePos[is]);
-    //tracker.OFTtracking();
-    tracker.Simpletracking();
+    tracker.OFTtracking();
+    //tracker.Simpletracking();
     double tmpchi2 = tracker.CalcChi2();
     if(tmpchi2>0 && tmpchi2<minchi2){
       bestis = is;
@@ -1176,8 +1176,8 @@ void TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain,
   double minchi2 = 1e9;
   for(int is=0; is<nsource; is++){
     Tracker tracker(fHits, SourceE[is], SourcePos[is]);
-    //tracker.OFTtracking();
-    tracker.Simpletracking();
+    tracker.OFTtracking();
+    //tracker.Simpletracking();
     double tmpchi2 = tracker.CalcChi2();
     if(tmpchi2>0 && tmpchi2<minchi2){
       bestis = is;

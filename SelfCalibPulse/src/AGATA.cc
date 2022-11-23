@@ -996,6 +996,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       vnoiseidx.clear();
       vnoiseidxshift.clear();
 #endif
+      nsource = 0;
       sourcex.clear();
       sourcey.clear();
       sourcez.clear();
@@ -1027,13 +1028,14 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	  vnoiseidx.push_back(obj.inoiseidx);
 	  vnoiseidxshift.push_back(obj.inoiseidxshift);
 #endif
-	  nsource = obj.insource;
-	  sourcex = *obj.isourcex;
-	  sourcey = *obj.isourcey;
-	  sourcez = *obj.isourcez;
-	  sourceeng = *obj.isourceeng;
-	  bestis = obj.ibestis;
-
+	  if(nsource==0){
+	    nsource = obj.insource;
+	    for(float x : *obj.isourcex) sourcex.push_back(x);
+	    for(float y : *obj.isourcey) sourcey.push_back(y);
+	    for(float z : *obj.isourcez) sourcez.push_back(z);
+	    for(float eng : *obj.isourceeng) sourceeng.push_back(eng);
+	    bestis = obj.ibestis;
+	  }
 	}
 
       }
@@ -2314,8 +2316,8 @@ void AGATA::TrackingLoop(){
     double minchi2 = 1e9;
     for(int is=0; is<nsource; is++){
       Tracker tracker(fHits, EGamma[is], sourcepos[is]);
-      //tracker.OFTtracking();
-      tracker.Simpletracking();
+      tracker.OFTtracking();
+      //tracker.Simpletracking();
       double tmpchi2 = tracker.CalcChi2();
       if(tmpchi2>0 && tmpchi2<minchi2){
 	bestis = is;
@@ -2327,8 +2329,8 @@ void AGATA::TrackingLoop(){
 #ifdef TRACKINGTREE
     if(atrack.size()>1){
       Tracker tracker(fHits, EGamma[bestis], sourcepos[bestis]);
-      //tracker.OFTtracking();
-      tracker.Simpletracking();
+      tracker.OFTtracking();
+      //tracker.Simpletracking();
 
       lock_guard<mutex> lock(Trtreemtx);
       Trnhits = atrack.size();

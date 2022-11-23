@@ -41,7 +41,7 @@ private:
   vector<Hit*>* fHits; // Hits from one event
   int nhits;
 
-  double EGamma; // keV gamma energy for calibration, -1 means unknown energy
+  double EGamma; // MeV gamma energy for calibration, -1 means unknown energy
 
   vector<int> track; // the most likely order of Hits
 

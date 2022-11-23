@@ -4,7 +4,7 @@
 #include "Tracker.hh"
 
 Tracker::Tracker(vector<Hit*>* hits){
-  Tracker(hits,-1);
+  Tracker(hits,-1000);
 }
 
 Tracker::Tracker(vector<Hit*>* hits, float E){
@@ -16,7 +16,7 @@ Tracker::Tracker(vector<Hit*>* hits, float E, TVector3 sourcepos){
   fHits = hits;
   nhits = fHits->size();
 
-  EGamma = E; //keV
+  EGamma = E / 1000.; //MeV
 
   sPos.SetXYZ(sourcepos.X()/10., sourcepos.Y()/10., sourcepos.Z()/10.); // change to cm
   
@@ -420,6 +420,9 @@ void Tracker::OFTtracking(){
   vector<vector<int>> interaction(MaxNDets);
   vector<double> probtot;
   for(int i=0; i<n; i++){ //loop clusters
+
+    //if(EGamma>0) et[i] = EGamma; //<------------- use source energy
+
     flagu[i]=0;
     flagpair[i]=0;
     interaction[i].clear();
@@ -694,6 +697,8 @@ void Tracker::Simpletracking(){
   vector<double> chi2tot;
   vector<double> chi2tot2; // secondbestchi2
   for(int i=0; i<n; i++){ //loop clusters
+    //if(EGamma>0) et[i] = EGamma; //<------------- use source energy
+
     flagu[i]=0;
     interaction[i].clear();
 
@@ -780,10 +785,11 @@ double Tracker::CalcChi2(){
     energy.push_back(e[track[i]]);
     etotale += e[track[i]];
   }
-  if(EGamma>0) etotale = EGamma/1000;
+  if(EGamma>0) etotale = EGamma;
   
 
   for(int i=0; i<track.size()-1; i++){
+  //for(int i=0; i<1; i++){
 
     TVector3 mom01 = pos[i+1]-pos[i];
     TVector3 mom12 = pos[i+2]-pos[i+1];
