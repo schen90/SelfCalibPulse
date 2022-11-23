@@ -1474,6 +1474,9 @@ float AGATA::FindMaxDev(PS *aps, Hit *ahit){
     PSC *apsc = fPSC[detid][segid]->at(ipsc);
 
     for(int is=0; is<NSeg_comp; is++){
+
+      if( DivDir>-1 && ((int)(is/2))!=DivDir) continue;
+
       int iseg = apsc->segcmp[is];
 
       float asegpulse[NSig_comp], bsegpulse[NSig_comp];
@@ -1485,6 +1488,7 @@ float AGATA::FindMaxDev(PS *aps, Hit *ahit){
       apsc->devabs[is].push_back(dev[0]);
 
       if(dev[0]>MaxDev) MaxDev = dev[0];
+
     }
   }
 
@@ -1499,6 +1503,9 @@ void AGATA::FindDevCut(){
       for(PSC *apsc : *fPSC[idet][iseg]){
 
 	for(int is=0; is<NSeg_comp; is++){
+
+	  if( DivDir>-1 && ((int)(is/2))!=DivDir) continue;
+
 	  if(apsc->devabscut[is][0]<0){
 	    sort(apsc->devabs[is].begin(), apsc->devabs[is].end(), [](const float& l, const float& r){return l<r;});
 	    int nsize = apsc->devabs[is].size();
@@ -1595,33 +1602,41 @@ void AGATA::CalcDevSigma(){
 void AGATA::FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone){
 
   for(int is=0; is<NSeg_comp; is++){
-    int iseg = apsc->segcmp[is];
 
-    float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-    copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
-    copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
-
-    float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
-    Devseg(asegpulse, bsegpulse, dev);
     vector<int> tmp;
 
-    if(apsc->devabscut[is][0]<0){
-      cout<<"devabscut[0]<0 ; something wrong!!!"<<endl;
-      return;
-    }
+    if( DivDir<0 || ((int)(is/2))==DivDir){
 
-    if(dev[0] <= apsc->devabscut[is][0]) tmp.push_back(0); // center zone
-    if(dev[0] >  apsc->devabscut[is][1]){
-      if( dev[1] >=  0.6 * dev[0]) tmp.push_back(1);    // above zone
-      if( dev[1] <= -0.6 * dev[0]) tmp.push_back(2);    // below zone
-      // bipolar zone
-      if( dev[1]<0.7*dev[0] && dev[1]>-0.7*dev[0]){
-	//tmp.push_back(3);                               // bipolar zone
-	if(dev[2] >  0) tmp.push_back(3);               // bipolar zone +-
-	else            tmp.push_back(4);               // bipolar zone -+
+      // divide
+      int iseg = apsc->segcmp[is];
+      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
+      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
+      copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
+
+      float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
+      Devseg(asegpulse, bsegpulse, dev);
+
+      if(apsc->devabscut[is][0]<0){
+	cout<<"devabscut[0]<0 ; something wrong!!!"<<endl;
+	return;
       }
-    }
 
+      if(dev[0] <= apsc->devabscut[is][0]) tmp.push_back(0); // center zone
+      if(dev[0] >  apsc->devabscut[is][1]){
+	if( dev[1] >=  0.6 * dev[0]) tmp.push_back(1);    // above zone
+	if( dev[1] <= -0.6 * dev[0]) tmp.push_back(2);    // below zone
+	// bipolar zone
+	if( dev[1]<0.7*dev[0] && dev[1]>-0.7*dev[0]){
+	  //tmp.push_back(3);                               // bipolar zone
+	  if(dev[2] >  0) tmp.push_back(3);               // bipolar zone +-
+	  else            tmp.push_back(4);               // bipolar zone -+
+	}
+      }
+
+    }else{ // not divide
+      tmp.push_back(0);
+    }
+    
     divzone->push_back(tmp);
   }
 

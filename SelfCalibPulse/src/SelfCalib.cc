@@ -212,6 +212,11 @@ int main(int argc, char* argv[]){
     agata->CheckPSCstat(PSCstat);
     while(PSCstat[0]>MAXHITS){
       cout<<"\033[1;31m"<<"Divide "<<ndiv<<": \033[0m"<<endl;
+
+      int DivDir = ndiv%3;
+      if(DivDir<0) cout<<"divide in all direction..."<<endl;
+      else         cout<<"divide in direction "<<DivDir<<endl;
+      if(kConfig) agata->SetDivDir(DivDir);
       
       time(&stepstart);
       if(kConfig) treereader->GenerateHCs(1,agata);

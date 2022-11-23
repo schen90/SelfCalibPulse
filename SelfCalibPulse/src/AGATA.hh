@@ -82,6 +82,7 @@ public:
   void  FindDevSigma(PS *aps, Hit *ahit);
   void  CalcDevSigma();
 
+  void  SetDivDir(int val){ DivDir=val;}
   void  FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone);
   int   AddPStoDiv(PS *aps, Hit *ahit);
 
@@ -160,6 +161,8 @@ private:
 
   vector<Int_t> HCMap[MaxNDets][NSeg];
   Int_t         HCstat[MaxNDets][NSeg][2]; // 0: fHCs size, 1: fHCs max idx
+
+  int DivDir = -1; // divide direction -1:all, 0:seg-core, 1:sector, 2:slice
   
   // EventHits
   int nConfig = 0;
