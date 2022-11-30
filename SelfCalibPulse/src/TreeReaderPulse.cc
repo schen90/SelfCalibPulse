@@ -993,11 +993,23 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 
   if(fPS.size()<2) return; // at least one Compton scattering
 
+#ifdef DIFFTOTE
+  float Etot = 0;
+  for(int i=0; i<fPS.size(); i++) Etot += fPS[i].energy;
+  bool kskip = true;
+  for(int is=0; is<SourceE.size(); is++) if(fabs(Etot-SourceE[is])<DIFFTOTE) kskip = false;
+  if(kskip) return;
+#endif
+
   // create Hit-----------------------------------------------
   vector<int> uflag;
   EventHits* fEvent = new EventHits(SourceE, SourcePos);
   fEvent->SetIdx(iconfig,run,ientry);
 
+#ifdef DIFFTOTE
+  fEvent->Etot = Etot;
+#endif
+  
   for(int i=0; i<fPS.size(); i++){ //loop fPS
 
     TVector3 hitpos(fPS[i].labpos[0],fPS[i].labpos[1],fPS[i].labpos[2]);
@@ -1030,6 +1042,9 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
   int bestis = 0;
   double minchi2 = 1e9;
   for(int is=0; is<nsource; is++){
+#ifdef DIFFTOTE
+    if( !(fabs(Etot-SourceE[is])<DIFFTOTE) ) continue;
+#endif
     Tracker tracker(fHits, SourceE[is], SourcePos[is]);
     tracker.OFTtracking();
     //tracker.Simpletracking();
@@ -1162,6 +1177,9 @@ void TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain,
   if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return;}
 
   vector<Hit*>* fHits = agata->FindEventHits(iEvtHit)->GetfHits();
+#ifdef DIFFTOTE
+  float Etot = agata->FindEventHits(iEvtHit)->Etot;
+#endif
   vector<int> uflag;
   for(int i=0; i<fHits->size(); i++){ //loop fPS
     uflag.push_back(1);
@@ -1175,6 +1193,9 @@ void TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain,
   int bestis = 0;
   double minchi2 = 1e9;
   for(int is=0; is<nsource; is++){
+#ifdef DIFFTOTE
+    if( !(fabs(Etot-SourceE[is])<DIFFTOTE) ) continue;
+#endif
     Tracker tracker(fHits, SourceE[is], SourcePos[is]);
     tracker.OFTtracking();
     //tracker.Simpletracking();

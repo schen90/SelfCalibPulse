@@ -22,6 +22,7 @@ using namespace std;
 //#define PSA // PSA to assign initial pos
 #define RADIUS0 2 // mm, initial PSC size from PSA
 #define MINUIT2
+#define DIFFTOTE 10 // total energy match source, maxdiff 10keV
 //#define MULTISEG // include multi-segment events
 //#define CHECKTRACK // check track using OFT tacking
 //#define SINGLEHIT

@@ -2284,6 +2284,9 @@ void AGATA::TrackingLoop(){
     vector<Hit*>* fHits;
     vector<TVector3> sourcepos; // mm
     vector<float> EGamma; // keV
+#ifdef DIFFTOTE
+    float Etot;
+#endif
     {
 #ifdef NTHREADS2
       lock_guard<mutex> lock(EvtHitsmtx);
@@ -2312,6 +2315,9 @@ void AGATA::TrackingLoop(){
 
       if(ievt>=Nevts) continue;
       fHits = fEventHits->at(ievt)->GetfHits();
+#ifdef DIFFTOTE
+      Etot = fEventHits->at(ievt)->Etot;
+#endif
       sourcepos.clear();  EGamma.clear();
       int nsource = fEventHits->at(ievt)->GetNSource();
       for(int is=0; is<nsource; is++){
@@ -2330,6 +2336,9 @@ void AGATA::TrackingLoop(){
     int bestis = 0;
     double minchi2 = 1e9;
     for(int is=0; is<nsource; is++){
+#ifdef DIFFTOTE
+      if( !(fabs(Etot-EGamma[is])<DIFFTOTE) ) continue;
+#endif
       Tracker tracker(fHits, EGamma[is], sourcepos[is]);
       tracker.OFTtracking();
       //tracker.Simpletracking();
