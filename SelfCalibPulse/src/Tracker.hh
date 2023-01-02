@@ -20,7 +20,6 @@ public:
   virtual ~Tracker();
 
   vector<int> GetTrack(){ return track;}
-  bool CheckOrder();
   double GetFOM1(){return FOM1;}
   double GetFOM2(){return FOM2;}
   

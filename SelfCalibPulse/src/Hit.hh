@@ -21,14 +21,11 @@ class HitCollection;
 class Hit {
 
 public:
-  Hit(int hitdet, int hitseg, float E, TVector3 hitpos, TVector3 initpos); // keV and mm
+  Hit(int hitdet, int hitseg, float E, TVector3 initpos); // keV and mm
   Hit(TVector3 sourcepos); // if hit is the source, det = -1, seg = -1
   Hit(); // if hit is the source, det = -1, seg = -1
   virtual ~Hit();
 
-  void SetInterid(int val){ interid = val;}
-  int GetInterid(){ return interid;}
-  
   void SetLevel(int val){ level = val;}
   int GetLevel(){ return level;}
   
@@ -55,7 +52,6 @@ public:
   Float_t GetE(){ return depE;} // in keV
   
   TVector3 GetPosition(){ return TVector3(calpos[0],calpos[1],calpos[2]);}
-  TVector3 GetRealPosition(){ return TVector3(labpos[0],labpos[1],labpos[2]);}
 
   void CalcAveHCsPosition(int thres); // calc. calpos
 
@@ -65,29 +61,17 @@ public:
   Int_t GetDetectorID(){ return det;}
   Int_t GetSegmentID(){ return seg;}
 
-#ifdef NOISE
-  void SetNoiseIdx(int val){ noiseidx = val;}
-  Int_t GetNoiseIdx(){ return noiseidx;}
-  void SetNoiseIdxShift(int val){ noiseidxshift = val;}
-  Int_t GetNoiseIdxShift(){ return noiseidxshift;}
-#endif
   
 private:
   int level; // 1:init  0:cannot group with others  2:check for divide
 
   int   det;
   int   seg;
-  int   interid; // interaction id in a event
   vector<HitCollection*>* hitCollections; //one hit can be assigned to several hitcollections, pos set as the ave of all hitcollections
 
   Float_t depE; // deposit Energy in the hit, keV
   Float_t calpos[3];  // selfcalib position in labframe, set as the average of all PSC
-  Float_t labpos[3];  // simulated position in labframe
 
-#ifdef NOISE
-  int noiseidx;
-  int noiseidxshift;
-#endif
 };
 
 #endif /* HIT_HH */

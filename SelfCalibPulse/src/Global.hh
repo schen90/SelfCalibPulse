@@ -15,8 +15,8 @@ using namespace std;
 
 #define GB 1073741824. // size of 1GB 1024*1024*1024
 #define MaxMemoryUsage 100.
-#define NTHREADS 20
-#define NTHREADS2 50
+#define NTHREADS 6
+#define NTHREADS2 40
 #define ONECLUST // make one cluster in tracking
 #define TRACKINGTREE // ouput tracking results
 //#define PSA // PSA to assign initial pos
@@ -26,11 +26,9 @@ using namespace std;
 //#define MULTISEG // include multi-segment events
 //#define CHECKTRACK // check track using OFT tacking
 //#define SINGLEHIT
-#define ADDPS // input G4Tree noPS, addPS from db
-#define NOISE 1000000
 #define PSCEMIN 0. // keV, PSC greate with PS Energy > PSCEMIN
 #define MINHITS 10    // min nhits for a good HC
-#define MAXHITS 5000  // max nhit for a HC
+#define MAXHITS 1000  // max nhit for a HC
 #define SHORT
 
 // agata
@@ -43,7 +41,7 @@ using namespace std;
 #define NSeg 36
 #define NSegCore 37
 #define NSeg_comp 6
-#define NSig 56
+#define NSig 60
 #define NSig_comp 56
 #define LOOP_SSE4_seg 14
 #define LOOP_SSE8_seg 7
@@ -77,13 +75,7 @@ using namespace std;
 struct PS{
   int   det;
   int   seg;
-  int   nhits;
-  int   interid;  // interaction id in a event
-  vector<float> hiteng; // hit energy
   float energy; // core energy
-
-  float labpos[3]; // lab position
-  float detpos[3]; // det position
 
   float opulse[NSegCore][NSig]; // original pulse shape
 };

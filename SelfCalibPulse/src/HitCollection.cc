@@ -7,14 +7,12 @@
 
 #include "HitCollection.hh"
 
-HitCollection::HitCollection(Int_t detid, Int_t segid, Int_t pscid,
-			     Float_t* lpos, Float_t* cpos) {
+HitCollection::HitCollection(Int_t detid, Int_t segid, Int_t pscid, Float_t* cpos) {
   det = detid;
   seg = segid;
   PSCid = pscid;
 
   for(int i=0; i<3; i++){
-    labpos[i] = lpos[i];
     calpos[i] = cpos[i];
     initpos[i] = cpos[i];
   }

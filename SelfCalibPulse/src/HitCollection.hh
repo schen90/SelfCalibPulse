@@ -22,7 +22,7 @@ using namespace std;
 class HitCollection {
 
 public:
-  HitCollection(Int_t detid, Int_t segid, Int_t pscid, Float_t *lpos, Float_t *cpos);
+  HitCollection(Int_t detid, Int_t segid, Int_t pscid, Float_t *cpos);
   virtual ~HitCollection();
 
   int GetDet(){ return det;}
@@ -34,7 +34,6 @@ public:
 
   void SetPosition(Float_t* posval){ for(int i=0; i<3; i++) calpos[i]=posval[i];}
   void SetInitPosition(Float_t* posval){ for(int i=0; i<3; i++) initpos[i]=posval[i];}
-  void SetRealPosition(Float_t* posval){ for(int i=0; i<3; i++) labpos[i]=posval[i];}
 
   void SetFitPosition(Float_t* posval){
 #ifdef NTHREADS2
@@ -45,7 +44,6 @@ public:
 
   TVector3 GetPosition(){ return TVector3(calpos[0], calpos[1], calpos[2]);}
   TVector3 GetInitPosition(){ return TVector3(initpos[0],initpos[1],initpos[2]);}
-  TVector3 GetRealPosition(){ return TVector3(labpos[0],labpos[1],labpos[2]);}
 
   TVector3 GetFitPosition(){
 #ifdef NTHREADS2
@@ -75,9 +73,6 @@ public:
   void RegisterWithHits();
 
   void Clear(){
-    for(int ix=0; ix<3; ix++){
-      labpos[ix] = 0;
-    }
     hits->clear();
     paths->clear();
     phits->clear();
@@ -97,7 +92,6 @@ private:
 
   float calpos[3];  // calib position in lab frame
   float initpos[3]; // initial position in lab frame
-  float labpos[3];  // real position in lab frame
 
   float fitpos[3];  // position used in fitting
   

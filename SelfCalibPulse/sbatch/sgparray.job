@@ -3,13 +3,14 @@
 #SBATCH --mail-type=END,FAIL                  # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=sidong.chen@york.ac.uk    # Where to send mail
 #SBATCH --ntasks=1                            # Run on a single CPU
-#SBATCH --cpus-per-task=20                    # ...with two cores
-#SBATCH --mem=260gb                           # Job memory request
-#SBATCH --time=48:00:00                       # Time limit hrs:min:sec
-#SBATCH --output=log/SC_gp_%A_%a_1e11.log     # Standard output and error log
+#SBATCH --cpus-per-task=6                     # ...with two cores
+#SBATCH --mem=50gb                            # Job memory request
+#SBATCH --time=24:00:00                       # Time limit hrs:min:sec
+#SBATCH --output=log/SC_e669_gp_%A_%a.log     # Standard output and error log
 #SBATCH --account=phys-agata-2022             # Project account
-#SBATCH --array=0-44                          # Array range
-####SBATCH --array=0,1,3,6,9,12                          # Array range
+####SBATCH --array=0-44                          # Array range
+#SBATCH --array=0-2,6-14,30-41                # Array range
+#SBATCH --partition=himem                     # Select nodes
 
 detid=$SLURM_ARRAY_TASK_ID
 
@@ -20,7 +21,8 @@ echo
 
 module load devel/CMake/3.16.4-GCCcore-9.3.0 phys/Geant4/10.05.p01-foss-2020a phys/ROOT/6.22.02-foss-2020a-Python-3.8.2
 
-./build/SelfCalib -config config/config_noPS11.txt -gp $detid
+./build/SelfCalib -config config/config_e669.txt -gp $detid
+#./build/SelfCalib -config config/config_noPS10.txt -PSA -gp $detid
 
 echo
 echo Job completed at `date`

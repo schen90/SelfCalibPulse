@@ -135,21 +135,6 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 	TMatrixD CadPos2 = agatageo->Lab2DetPos(det,CalPos2);
 	for(int ix=0; ix<3; ix++) cadpos2[ix] = CadPos2(ix,0);
 
-	vtmp = fHCs[idet][iseg]->at(ic)->GetRealPosition();
-	labpos[0] = vtmp.X();  labpos[1] = vtmp.Y();  labpos[2] = vtmp.Z();
-	TMatrixD LabPos(3,1);
-	for(int ix=0; ix<3; ix++) LabPos(ix,0) = labpos[ix];
-	TMatrixD DetPos = agatageo->Lab2DetPos(det,LabPos);
-	for(int ix=0; ix<3; ix++) detpos[ix] = DetPos(ix,0);
-
-	dist = 0;
-	for(int ix=0; ix<3; ix++) dist += SQ(calpos[ix]-labpos[ix]);
-	dist = sqrt(dist);
-
-	dist2 = 0;
-	for(int ix=0; ix<3; ix++) dist2 += SQ(calpos2[ix]-labpos[ix]);
-	dist2 = sqrt(dist2);
-
 	for(int iiseg=0; iiseg<NSegCore; iiseg++){
 	  copy_n(fPSC[idet][iseg]->at(ic)->spulse[iiseg], NSig, spulse[iiseg]);
 	}
@@ -227,9 +212,6 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 	PSC* apsc = new PSC(det, seg);
 	apsc->index = index;
 	apsc->nhits = nhits;
-
-	copy_n(labpos, 3, apsc->labpos);
-	copy_n(detpos, 3, apsc->detpos);
 
 	for(int iiseg=0; iiseg<NSegCore; iiseg++){
 	  copy_n(spulse[iiseg], NSig, apsc->spulse[iiseg]);
@@ -323,7 +305,6 @@ void AGATA::WriteHCfiles(int detid){
 
       hctree[iseg]->Branch("calpos",calpos,"calpos[3]/F"); // init position in lab frame
       hctree[iseg]->Branch("calpos2",calpos2,"calpos2[3]/F"); // calib position in lab frame
-      hctree[iseg]->Branch("labpos",labpos,"labpos[3]/F"); // real position in lab frame
 
       for(HitCollection* ahc : *fHCs[idet][iseg]){
 
@@ -338,9 +319,6 @@ void AGATA::WriteHCfiles(int detid){
 
 	tmp = ahc->GetPosition();
 	calpos2[0] = tmp.X(); calpos2[1] = tmp.Y(); calpos2[2] = tmp.Z();
-
-	tmp = ahc->GetRealPosition();
-	labpos[0] = tmp.X(); labpos[1] = tmp.Y(); labpos[2] = tmp.Z();
 
 	hctree[iseg]->Fill();
       }
@@ -383,7 +361,6 @@ void AGATA::LoadHCfiles(int detid){
   hctree->SetBranchAddress("index",&index); // PSCid
 
   hctree->SetBranchAddress("calpos",calpos); // init position in lab frame
-  hctree->SetBranchAddress("labpos",labpos); // real position in lab frame
   
   int Nhcs = hctree->GetEntriesFast();
 
@@ -393,7 +370,7 @@ void AGATA::LoadHCfiles(int detid){
 
     //if(fHCs[det][seg]->size()!=index){ cerr<<"HC index not match!!!"<<endl;}
 
-    HitCollection* ahc = new HitCollection(det, seg, index, labpos, calpos);
+    HitCollection* ahc = new HitCollection(det, seg, index, calpos);
 
     fHCs[det][seg]->push_back(ahc);
     HCMap[det][seg].push_back(index);
@@ -477,13 +454,9 @@ void AGATA::WriteEvtHitsfiles(int detid){
     htree[idet] = new TTree("tree",Form("tree for det%d",idet));
   }
   
-  int            interid; // interaction id in a event
   vector<int>    vhcid;
   float          depE;
-#ifdef NOISE
-  int            noiseidx;
-  int            noiseidxshift;
-#endif
+
   int            nsource;
   vector<float>  sourcex;
   vector<float>  sourcey;
@@ -517,15 +490,11 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("ientry",&ientry);
 	htree[idet]->Branch("det",&det);
 	htree[idet]->Branch("seg",&seg);
-	htree[idet]->Branch("interid",&interid);
+
 	htree[idet]->Branch("hcid",&vhcid);
 	htree[idet]->Branch("depE",&depE);
 	htree[idet]->Branch("calpos",calpos,"calpos[3]/F");
-	htree[idet]->Branch("labpos",labpos,"labpos[3]/F");
-#ifdef NOISE
-	htree[idet]->Branch("noiseidx",&noiseidx);
-	htree[idet]->Branch("noiseidxshift",&noiseidxshift);
-#endif
+
 	htree[idet]->Branch("nsource",&nsource);
 	htree[idet]->Branch("sourcex",&sourcex);
 	htree[idet]->Branch("sourcey",&sourcey);
@@ -533,7 +502,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("sourceeng",&sourceeng);
 	htree[idet]->Branch("bestis",&bestis);
 #ifdef DIFFTOTE
-	htree[idet]->Branch("Etot",&Etot);
+        htree[idet]->Branch("Etot",&Etot);
 #endif
       }
     }
@@ -562,7 +531,6 @@ void AGATA::WriteEvtHitsfiles(int detid){
     for(Hit *ah : *fHits){
       det = ah->GetDet();
       seg = ah->GetSeg();
-      interid = ah->GetInterid();
       
       bool kfill = false;
       for(int idet : idlist) if(idet==det) kfill = true;
@@ -578,13 +546,6 @@ void AGATA::WriteEvtHitsfiles(int detid){
       tmp = ah->GetPosition();
       calpos[0] = tmp.X(); calpos[1] = tmp.Y(); calpos[2] = tmp.Z();
 
-      tmp = ah->GetRealPosition();
-      labpos[0] = tmp.X(); labpos[1] = tmp.Y(); labpos[2] = tmp.Z();
-
-#ifdef NOISE
-      noiseidx = ah->GetNoiseIdx();
-      noiseidxshift = ah->GetNoiseIdxShift();
-#endif
       htree[det]->Fill();
     }
   }
@@ -664,16 +625,11 @@ void AGATA::CombEvtHitsfiles(){
     int          ientry;
     int          idet;
     int          iseg;
-    int          iinterid;
+
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
-    float        ilabpos[3];
 
-#ifdef NOISE
-    int          inoiseidx;
-    int          inoiseidxshift;
-#endif
     int            insource;
     vector<float> *isourcex = 0;
     vector<float> *isourcey = 0;
@@ -730,7 +686,7 @@ void AGATA::CombEvtHitsfiles(){
       for(int detid=0; detid<NDets; detid++){
 
 	if(idx[detid]<0){ 
-	  cerr<<"iconfig "<<iconfig<<" irun "<<irun<<" detid "<<detid<<" not exist!!!!"<<endl; 
+	  //cerr<<"iconfig "<<iconfig<<" irun "<<irun<<" detid "<<detid<<" not exist!!!!"<<endl; 
 	  continue;
 	}
 
@@ -742,15 +698,11 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("ientry",        &obj[detid].ientry);
 	htree[detid]->SetBranchAddress("det",           &obj[detid].idet);
 	htree[detid]->SetBranchAddress("seg",           &obj[detid].iseg);
-	htree[detid]->SetBranchAddress("interid",       &obj[detid].iinterid);
+
 	htree[detid]->SetBranchAddress("hcid",          &obj[detid].ihcid);
 	htree[detid]->SetBranchAddress("depE",          &obj[detid].idepE);
 	htree[detid]->SetBranchAddress("calpos",         obj[detid].icalpos);
-	htree[detid]->SetBranchAddress("labpos",         obj[detid].ilabpos);
-#ifdef NOISE
-	htree[detid]->SetBranchAddress("noiseidx",      &obj[detid].inoiseidx);
-	htree[detid]->SetBranchAddress("noiseidxshift", &obj[detid].inoiseidxshift);
-#endif
+
 	htree[detid]->SetBranchAddress("nsource",       &obj[detid].insource);
 	htree[detid]->SetBranchAddress("sourcex",       &obj[detid].isourcex);
 	htree[detid]->SetBranchAddress("sourcey",       &obj[detid].isourcey);
@@ -758,7 +710,7 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("sourceeng",     &obj[detid].isourceeng);
 	htree[detid]->SetBranchAddress("bestis",        &obj[detid].ibestis);
 #ifdef DIFFTOTE
-	htree[detid]->SetBranchAddress("Etot",          &obj[detid].iEtot);
+        htree[detid]->SetBranchAddress("Etot",          &obj[detid].iEtot);
 #endif
 
 	htree[detid]->GetEntry(Nevts[detid]-1);
@@ -770,15 +722,11 @@ void AGATA::CombEvtHitsfiles(){
       MaxEntry += 1;
 
       hfileall->cd();
-      int oconfig, orun, oentry, odet, oseg, ointerid;
+      int oconfig, orun, oentry, odet, oseg;
       vector<int>    ovhcid;
       float          odepE;
       float          ocalpos[3];
-      float          olabpos[3];
-#ifdef NOISE
-      int            onoiseidx;
-      int            onoiseidxshift;
-#endif
+
       int            onsource;
       vector<float>  osourcex;
       vector<float>  osourcey;
@@ -794,15 +742,11 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("ientry",&oentry);
       htreeall->Branch("det",&odet);
       htreeall->Branch("seg",&oseg);
-      htreeall->Branch("interid",&ointerid);
+
       htreeall->Branch("hcid",&ovhcid);
       htreeall->Branch("depE",&odepE);
       htreeall->Branch("calpos",ocalpos,"calpos[3]/F");
-      htreeall->Branch("labpos",olabpos,"labpos[3]/F");
-#ifdef NOISE
-      htreeall->Branch("noiseidx",&onoiseidx);
-      htreeall->Branch("noiseidxshift",&onoiseidxshift);
-#endif
+
       htreeall->Branch("nsource",&onsource);
       htreeall->Branch("sourcex",&osourcex);
       htreeall->Branch("sourcey",&osourcey);
@@ -828,15 +772,11 @@ void AGATA::CombEvtHitsfiles(){
 	      oentry = obj[detid].ientry;
 	      odet = obj[detid].idet;
 	      oseg = obj[detid].iseg;
-	      ointerid = obj[detid].iinterid;
+
 	      for(int id : *obj[detid].ihcid) ovhcid.push_back(id);
 	      odepE = obj[detid].idepE;
 	      for(int ix=0; ix<3; ix++) ocalpos[ix] = obj[detid].icalpos[ix];
-	      for(int ix=0; ix<3; ix++) olabpos[ix] = obj[detid].ilabpos[ix];
-#ifdef NOISE
-	      onoiseidx = obj[detid].inoiseidx;
-	      onoiseidxshift = obj[detid].inoiseidxshift;
-#endif
+
 	      onsource = obj[detid].insource;
 	      for(float x : *obj[detid].isourcex) osourcex.push_back(x);
 	      for(float y : *obj[detid].isourcey) osourcey.push_back(y);
@@ -844,7 +784,7 @@ void AGATA::CombEvtHitsfiles(){
 	      for(float eng : *obj[detid].isourceeng) osourceeng.push_back(eng);
 	      obestis = obj[detid].ibestis;
 #ifdef DIFFTOTE
-	      oEtot = obj[detid].iEtot;
+              oEtot = obj[detid].iEtot;
 #endif
 	      
 	      htreeall->Fill();
@@ -882,7 +822,7 @@ void AGATA::CombEvtHitsfiles(){
 }
 
 
-void AGATA::LoadEvtHitsfiles2(int iconfig){
+void AGATA::LoadEvtHitsfiles(int iconfig){
 
   //------------------------------------------------
   // Hit
@@ -896,15 +836,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     int          ientry;
     int          idet;
     int          iseg;
-    int          iinterid;
+
     vector<int> *ihcid = 0;
     float        idepE;
     float        icalpos[3];
-    float        ilabpos[3];
-#ifdef NOISE
-    int          inoiseidx;
-    int          inoiseidxshift;
-#endif
+
     int            insource;
     vector<float> *isourcex = 0;
     vector<float> *isourcey = 0;
@@ -969,15 +905,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     htree->SetBranchAddress("ientry",        &obj.ientry);
     htree->SetBranchAddress("det",           &obj.idet);
     htree->SetBranchAddress("seg",           &obj.iseg);
-    htree->SetBranchAddress("interid",       &obj.iinterid);
+
     htree->SetBranchAddress("hcid",          &obj.ihcid);
     htree->SetBranchAddress("depE",          &obj.idepE);
     htree->SetBranchAddress("calpos",         obj.icalpos);
-    htree->SetBranchAddress("labpos",         obj.ilabpos);
-#ifdef NOISE
-    htree->SetBranchAddress("noiseidx",      &obj.inoiseidx);
-    htree->SetBranchAddress("noiseidxshift", &obj.inoiseidxshift);
-#endif
+
     htree->SetBranchAddress("nsource",       &obj.insource);
     htree->SetBranchAddress("sourcex",       &obj.isourcex);
     htree->SetBranchAddress("sourcey",       &obj.isourcey);
@@ -996,15 +928,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 
     vector<int>            vdet;
     vector<int>            vseg;
-    vector<int>            vinterid;
+
     vector<vector<int>>    vhcid;
     vector<float>          vdepE;
     vector<vector<double>> vcalpos;
-    vector<vector<double>> vlabpos;
-#ifdef NOISE
-    vector<int>            vnoiseidx;
-    vector<int>            vnoiseidxshift;
-#endif
+
     int                    nsource;
     vector<float>          sourcex;
     vector<float>          sourcey;
@@ -1020,15 +948,11 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       //if(iety%10==0) cout<<"\r ientry = "<<iety<<flush;
       vdet.clear();
       vseg.clear();
-      vinterid.clear();
+
       vhcid.clear();
       vdepE.clear();
       vcalpos.clear();
-      vlabpos.clear();
-#ifdef NOISE
-      vnoiseidx.clear();
-      vnoiseidxshift.clear();
-#endif
+
       nsource = 0;
       sourcex.clear();
       sourcey.clear();
@@ -1045,7 +969,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 
 	  vdet.push_back(obj.idet);
 	  vseg.push_back(obj.iseg);
-	  vinterid.push_back(obj.iinterid);
+
 	  vhcid.push_back(*obj.ihcid);
 	  vdepE.push_back(obj.idepE);
 
@@ -1053,14 +977,6 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	  for(int ix=0; ix<3; ix++) tmppos1[ix]=obj.icalpos[ix];
 	  vcalpos.push_back(tmppos1);
 
-	  vector<double> tmppos2(3);
-	  for(int ix=0; ix<3; ix++) tmppos2[ix]=obj.ilabpos[ix];
-	  vlabpos.push_back(tmppos2);
-
-#ifdef NOISE
-	  vnoiseidx.push_back(obj.inoiseidx);
-	  vnoiseidxshift.push_back(obj.inoiseidxshift);
-#endif
 	  if(nsource==0){
 	    nsource = obj.insource;
 	    for(float x : *obj.isourcex) sourcex.push_back(x);
@@ -1069,7 +985,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	    for(float eng : *obj.isourceeng) sourceeng.push_back(eng);
 	    bestis = obj.ibestis;
 #ifdef DIFFTOTE
-	    Etot = obj.iEtot;
+            Etot = obj.iEtot;
 #endif
 	  }
 	}
@@ -1094,19 +1010,12 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       for(int i=0; i<vdet.size(); i++){
 	int detid = vdet[i];
 	int segid = vseg[i];
-	int interid = vinterid[i];
 
 	float depE = vdepE[i]; // keV
 	TVector3 initpos(vcalpos[i][0],vcalpos[i][1],vcalpos[i][2]); // mm
-	TVector3 hitpos(vlabpos[i][0],vlabpos[i][1],vlabpos[i][2]); // mm
 
-	Hit *ahit = new Hit(detid, segid, depE, hitpos, initpos);
-	ahit->SetInterid(interid);
+	Hit *ahit = new Hit(detid, segid, depE, initpos);
 	
-#ifdef NOISE
-	ahit->SetNoiseIdx(vnoiseidx[i]);
-	ahit->SetNoiseIdxShift(vnoiseidxshift[i]);
-#endif
 	fEvent->Add(ahit);
 	cHits++;
 
@@ -1173,12 +1082,12 @@ void AGATA::LoadEvtHitsconfigs(){
     atomrun = MinRun[iconfig];
     
 #ifndef NTHREADS2
-    LoadEvtHitsfiles2(iconfig);
+    LoadEvtHitsfiles(iconfig);
 #else
     thread th[NTHREADS2];
   
     for(int i=0; i<NTHREADS2; i++){
-      th[i] = thread(&AGATA::LoadEvtHitsfiles2, this, iconfig);
+      th[i] = thread(&AGATA::LoadEvtHitsfiles, this, iconfig);
     }
 
     for(int i=0; i<NTHREADS2; i++){
@@ -1264,10 +1173,7 @@ int AGATA::InitPSCandHC(int detid, int segid){
     newpsc->index = ipsc;
     newpsc->nhits = 0;
     newpsc->dividx = vector<int>(0);
-    for(int ix=0; ix<3; ix++){
-      newpsc->labpos[ix] = 0;
-      newpsc->detpos[ix] = 0;
-    }
+
     int fseg[NSeg_comp];
     agatageo->GetNextSegs(segid, fseg);
     for(int iseg=0; iseg<NSeg_comp; iseg++){
@@ -1289,12 +1195,10 @@ int AGATA::InitPSCandHC(int detid, int segid){
     // new HitCollection
     TMatrixD SegPos = agatageo->GetSegPos(detid,segid);
     float dummycalpos[3];
-    float dummylabpos[3];
     for(int ix=0; ix<3; ix++){
       dummycalpos[ix] = SegPos(ix,0);
-      dummylabpos[ix] = 0;
     }
-    HitCollection* newhc = new HitCollection(detid, segid, ipsc, dummylabpos, dummycalpos);
+    HitCollection* newhc = new HitCollection(detid, segid, ipsc, dummycalpos);
     fHCs[detid][segid]->push_back(newhc);
 
 #ifdef NTHREADS
@@ -1463,18 +1367,6 @@ int AGATA::AddPStoPSC(PS *aps, Hit *ahit, int ipsc){
 
   double nhitstmp = (double)fPSC[detid][segid]->at(ipsc)->nhits;
 
-  // calc average position
-  TMatrixD pos(3,1); for(int ix=0; ix<3; ix++) pos(ix,0) = aps->labpos[ix];
-  TMatrixD LabPos(3,1);
-  for(int ix=0; ix<3; ix++) LabPos(ix,0) = fPSC[detid][segid]->at(ipsc)->labpos[ix];
-  LabPos = 1./(nhitstmp+1)*(nhitstmp*LabPos + pos);
-  TMatrixD DetPos = agatageo->Lab2DetPos(detid,LabPos);
-
-  for(int ix=0; ix<3; ix++){
-    fPSC[detid][segid]->at(ipsc)->labpos[ix] = LabPos(ix,0);
-    fPSC[detid][segid]->at(ipsc)->detpos[ix] = DetPos(ix,0);
-  }
-
   // calc average pulse
   for(int iseg=0; iseg<NSegCore; iseg++){
     for(int isig=0; isig<NSig; isig++){
@@ -1488,7 +1380,6 @@ int AGATA::AddPStoPSC(PS *aps, Hit *ahit, int ipsc){
 
   // add to HitCollection
   fHCs[detid][segid]->at(ipsc)->AddHit(ahit);
-  fHCs[detid][segid]->at(ipsc)->SetRealPosition(fPSC[detid][segid]->at(ipsc)->labpos);
   ahit->AddHitCollection(fHCs[detid][segid]->at(ipsc));
 
   int tmpnhits = fPSC[detid][segid]->at(ipsc)->nhits;
@@ -1557,10 +1448,10 @@ void AGATA::FindDevCut(){
 
 	    }else{
 	      int ncut;
-	      ncut = (int)(0.5*nsize); // 0.5
+	      ncut = (int)(0.55*nsize); // 0.5
 	      apsc->devabscut[is][0] = apsc->devabs[is][ncut];
 
-	      ncut = (int)(0.5*nsize); // 0.5
+	      ncut = (int)(0.45*nsize); // 0.5
 	      apsc->devabscut[is][1] = apsc->devabs[is][ncut];
 	    }
 	  }
@@ -1905,8 +1796,6 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit, int jpsc){ // remove ahit from P
 
   vector<HitCollection*>* hcs = ahit->GetHitCollections();
 
-  TMatrixD pos(3,1); for(int ix=0; ix<3; ix++) pos(ix,0) = aps->labpos[ix];
-  
   for(HitCollection* ahc : *hcs){
 
     int ipsc = ahc->GetPid();
@@ -1914,10 +1803,6 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit, int jpsc){ // remove ahit from P
     if(jpsc>-1 && ipsc!=jpsc) continue;
 
     double nhitstmp = (double)fPSC[detid][segid]->at(ipsc)->nhits;
-
-    // calc average position
-    TMatrixD LabPos(3,1);
-    for(int it=0; it<3; it++) LabPos(it,0) = fPSC[detid][segid]->at(ipsc)->labpos[it];
 
     if(nhitstmp<1){
       cerr<<"something wrong, det = "<<detid<<" seg = "<<segid<<" ipsc = "<<ipsc
@@ -1928,14 +1813,6 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit, int jpsc){ // remove ahit from P
     double ftmp = 1;
     if(nhitstmp>1) ftmp = 1./(nhitstmp-1);
 
-    LabPos = ftmp*(nhitstmp*LabPos - pos);
-    TMatrixD DetPos = agatageo->Lab2DetPos(detid,LabPos);
-      
-    for(int it=0; it<3; it++){
-      fPSC[detid][segid]->at(ipsc)->labpos[it] = LabPos(it,0);
-      fPSC[detid][segid]->at(ipsc)->detpos[it] = DetPos(it,0);
-    }
-    
     // calc average pulse
     for(int iseg=0; iseg<NSegCore; iseg++)
       for(int isig=0; isig<NSig; isig++)
@@ -1948,7 +1825,6 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit, int jpsc){ // remove ahit from P
 
     // remove from HitCollection
     fHCs[detid][segid]->at(ipsc)->RemoveHit(ahit);
-    fHCs[detid][segid]->at(ipsc)->SetRealPosition(fPSC[detid][segid]->at(ipsc)->labpos);
 
     if(fHCs[detid][segid]->at(ipsc)->GetSize()==0){
       freeHCs[detid][segid].push_back(ipsc);
@@ -1995,11 +1871,6 @@ void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
   cPSCtotal--; cPSCmem--;
    
   fPSC[detid][segid]->at(ipsc)->nhits = 0;
-
-  for(int ix=0; ix<3; ix++){
-    fPSC[detid][segid]->at(ipsc)->labpos[ix] = 0;
-    fPSC[detid][segid]->at(ipsc)->detpos[ix] = 0;
-  }
 
   for(int is=0; is<NSeg_comp; is++){
     fPSC[detid][segid]->at(ipsc)->divzone[is] = -1;
@@ -2400,7 +2271,6 @@ void AGATA::TrackingLoop(){
       TrSource = true;
       TrSourceE = EGamma[bestis];
       TrSourcePos[0] = sourcepos[bestis].X();  TrSourcePos[1] = sourcepos[bestis].Y();  TrSourcePos[2] = sourcepos[bestis].Z();
-      TrCorrect = tracker.CheckOrder();
       TrFOM1 = tracker.GetFOM1();
       TrFOM2 = tracker.GetFOM2();
       Trtree->Fill();
@@ -2414,7 +2284,6 @@ void AGATA::TrackingLoop(){
       double depE = fHits->at(atrack[0])->GetE(); // keV
 
       Hit *sourcehit = new Hit(sourcepos[bestis]);
-      sourcehit->SetInterid(-1);
 #ifdef NTHREADS2
       lock_guard<mutex> lock(Pathsmtx);
 #endif
@@ -2488,7 +2357,6 @@ void AGATA::Tracking(int iter){
   Trtree->Branch("sourceE",&TrSourceE);
   Trtree->Branch("source",&TrSource);
   Trtree->Branch("sourcepos",TrSourcePos,"sourcepos[3]/F");
-  Trtree->Branch("correct",&TrCorrect);
   Trtree->Branch("FOM1",&TrFOM1);
   Trtree->Branch("FOM2",&TrFOM2);
 #endif
@@ -2916,11 +2784,6 @@ void AGATA::InitTreeWrite(TTree *tree){
   tree->Branch("calpos2",calpos2,"calpos2[3]/F");
   tree->Branch("cadpos2",cadpos2,"cadpos2[3]/F");
 
-  tree->Branch("labpos",labpos,"labpos[3]/F");
-  tree->Branch("detpos",detpos,"detpos[3]/F");
-  tree->Branch("dist",&dist);
-  tree->Branch("dist2",&dist2);
-
   tree->Branch("spulse",spulse,Form("spulse[%d][%d]/F",NSegCore,NSig));  
   tree->Branch("devsigma",devsigma,Form("devsigma[%d]/F",NSeg_comp));  
 
@@ -2936,9 +2799,6 @@ void AGATA::InitTreeRead(TTree *tree){
   tree->SetBranchAddress("cadpos",cadpos);
   tree->SetBranchAddress("calpos2",calpos2);
   tree->SetBranchAddress("cadpos2",cadpos2);
-
-  tree->SetBranchAddress("labpos",labpos);
-  tree->SetBranchAddress("detpos",detpos);
 
   tree->SetBranchAddress("spulse",spulse);
   tree->SetBranchAddress("devsigma",devsigma);

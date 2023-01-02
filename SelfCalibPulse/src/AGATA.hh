@@ -54,7 +54,7 @@ public:
   void WriteEvtHitsfiles(int detid);
   void Load(string configfile);
   void CombEvtHitsfiles();
-  void LoadEvtHitsfiles2(int iconfig);
+  void LoadEvtHitsfiles(int iconfig);
   void LoadEvtHitsconfigs();
   void ClearEvtHitsMem(); // clear EventHits in memory
 
@@ -181,7 +181,6 @@ private:
   bool TrSource;  // if start from source
   float TrSourceE;
   float TrSourcePos[3];
-  bool TrCorrect;
   double TrFOM1;
   double TrFOM2;
   mutex Trtreemtx;
@@ -207,11 +206,6 @@ private:
   float cadpos[3];     // init selfcalib interaction position in detframe float(3)
   float calpos2[3];    // selfcalib interaction position in labframe float(3)
   float cadpos2[3];    // selfcalib interaction position in detframe float(3)
-
-  float labpos[3];     // average interaction position in labframe float(3)
-  float detpos[3];     // average interaction position in detframe float(3)  
-  float dist;          // dist calpos - labpos
-  float dist2;         // dist calpos2 - labpos
 
   float spulse[NSegCore][NSig];  // average pulse shape
   float devsigma[NSeg_comp];     // standard deviation of compared segment

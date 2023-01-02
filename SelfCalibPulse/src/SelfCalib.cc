@@ -20,14 +20,13 @@ using namespace std;
 
 void help(){
   cout<<setw(30)<<left<<" -h"<<" : print options"<<endl
-      <<setw(30)<<left<<" -config configurefile"<<" : read G4SimTree from configure file"<<endl
+      <<setw(30)<<left<<" -config configurefile"<<" : read Tree from configure file"<<endl
       <<setw(30)<<left<<" -init"<<" : initial folders for selfcalib"<<endl
       <<setw(30)<<left<<" -gp i"<<" : group pulse shape for det i.  i=-1 : all det"<<endl
       <<setw(30)<<left<<" -PSA"<<" : PSA to assign initial hit pos"<<endl
       <<setw(30)<<left<<" -comb"<<" : combine Hit files for every run"<<endl
       <<setw(30)<<left<<" -Fit"<<" : Fit HCs pos"<<endl
       <<setw(30)<<left<<" -loop Ntrack Nfit"<<" : set iterate Ntrack Nfit"<<endl
-      <<setw(30)<<left<<" -scanPS Nevts Diff"<<" : scan Pulse Shape for one detector to compare Chi2"<<endl
       <<endl;
   return;
 }
@@ -50,7 +49,6 @@ int main(int argc, char* argv[]){
   bool kPSA        = false;
   bool kComb       = false;
   bool kFit        = false;
-  bool kScanPS     = false;
   
   string configfile;
   int Detid = -1;
@@ -86,10 +84,6 @@ int main(int argc, char* argv[]){
     }else if(TString(argv[i]) == "-loop"){
       NFullLoop = atoi(argv[++i]);
       NFitLoop = atoi(argv[++i]);
-    }else if(TString(argv[i]) == "-scanPS"){
-      kScanPS = true;
-      MaxEvts = atoi(argv[++i]);
-      Diff = atof(argv[++i]);
     }
 
   }
@@ -106,9 +100,7 @@ int main(int argc, char* argv[]){
     if(Detid>-1) cout<<" Det "<<Detid;
     else         cout<<" AllDet";
     cout<<"; ";
-#ifdef ADDPS
-    cout<<"AddPS; ";
-#endif
+
     if(kPSA) cout<<"PSA Radius0 "<<RADIUS0<<"; ";
   }
 
@@ -124,10 +116,6 @@ int main(int argc, char* argv[]){
   if(kFit) cout<<"NthrdsFit - "<<NTHREADS2<<"; ";
 #endif
 
-  if(kScanPS){
-    cout<<"ScanPS ";
-  }
-  
   cout<<"\e[0m"<<endl;
 
   
@@ -159,7 +147,7 @@ int main(int argc, char* argv[]){
   
   // init TreeReader
   TreeReaderPulse* treereader;
-  if(kMakeInit || kGroupPulse || kScanPS){
+  if(kMakeInit || kGroupPulse){
     treereader = new TreeReaderPulse(Detid);
     treereader->Load(configfile);
     treereader->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
@@ -177,25 +165,6 @@ int main(int argc, char* argv[]){
   agata->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
   agata->SetPSA(kPSA);
 
-#ifdef NOISE
-  cout<<Form("With noise")<<endl;
-#else
-  cout<<Form("Without noise")<<endl;
-#endif
-  
-
-  //*****************************************//
-  // Scan PS to determine chi2slimit
-  //*****************************************//
-  if(kScanPS){
-    treereader->ScanPS(agata, MaxEvts, Diff);
-    delete treereader;
-    delete agata;
-    time(&stop);
-    printf("\n============ Elapsed time: %.1f seconds =============\n",difftime(stop,start));
-    return 0;
-  }
-  
 
   //*****************************************//
   // Generate HitCollections

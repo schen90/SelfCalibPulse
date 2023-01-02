@@ -47,17 +47,6 @@ Tracker::~Tracker(){
 }
 
 
-bool Tracker::CheckOrder(){
-  bool isCorrect = true;
-  if(track.size()<2) return isCorrect;
-  for(int i=0; i<track.size()-1; i++){
-    if( fHits->at(track[i])->GetInterid() > fHits->at(track[i+1])->GetInterid() )
-      isCorrect = false;
-  }
-  return isCorrect;
-}
-
-
 // OFT
 double sig_pair(double E){ // pair cross section MeV and cm
   /* fitted in 1e-24cm2 units for Ge from atomic data tables 1970 7 page 590 */

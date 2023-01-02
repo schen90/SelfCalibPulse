@@ -18,9 +18,6 @@ public:
   int   divzone[NSeg_comp]; // divided zone
   vector<int> dividx;  // idx of daughter PSCs
 
-  float labpos[3];     // average interaction position in labframe float(3)
-  float detpos[3];     // average interaction position in detframe float(3)
-
   float devabscut[NSeg_comp][2];
   //float maxdevabs[NSeg_comp];     // max deviation (abs) value
   vector<float> devabs[NSeg_comp];     // all deviation (abs) values
