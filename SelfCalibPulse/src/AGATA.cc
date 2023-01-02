@@ -490,6 +490,9 @@ void AGATA::WriteEvtHitsfiles(int detid){
   vector<float>  sourcez;
   vector<float>  sourceeng;
   int            bestis;
+#ifdef DIFFTOTE
+  float          Etot;
+#endif
 
   for(ievt=0; ievt<fEventHits->size(); ievt++){ // loop events
     EventHits *fEvent = fEventHits->at(ievt);
@@ -529,6 +532,9 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("sourcez",&sourcez);
 	htree[idet]->Branch("sourceeng",&sourceeng);
 	htree[idet]->Branch("bestis",&bestis);
+#ifdef DIFFTOTE
+	htree[idet]->Branch("Etot",&Etot);
+#endif
       }
     }
 
@@ -547,6 +553,9 @@ void AGATA::WriteEvtHitsfiles(int detid){
       sourceeng.push_back(tmpeng);
     }
     bestis = fEvent->GetBestis();
+#ifdef DIFFTOTE
+    Etot = fEvent->Etot;
+#endif
     
     // get fHit information
     vector<Hit*>* fHits = fEvent->GetfHits();
@@ -671,6 +680,9 @@ void AGATA::CombEvtHitsfiles(){
     vector<float> *isourcez = 0;
     vector<float> *isourceeng = 0;
     int            ibestis;
+#ifdef DIFFTOTE
+    float          iEtot;
+#endif
   };
 
   OBJ obj[MaxNDets];
@@ -745,6 +757,9 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("sourcez",       &obj[detid].isourcez);
 	htree[detid]->SetBranchAddress("sourceeng",     &obj[detid].isourceeng);
 	htree[detid]->SetBranchAddress("bestis",        &obj[detid].ibestis);
+#ifdef DIFFTOTE
+	htree[detid]->SetBranchAddress("Etot",          &obj[detid].iEtot);
+#endif
 
 	htree[detid]->GetEntry(Nevts[detid]-1);
 	if(obj[detid].ientry>MaxEntry) MaxEntry=obj[detid].ientry;
@@ -770,6 +785,9 @@ void AGATA::CombEvtHitsfiles(){
       vector<float>  osourcez;
       vector<float>  osourceeng;
       int            obestis;
+#ifdef DIFFTOTE
+      float          oEtot;
+#endif
       htreeall = new TTree("tree",Form("tree for Hits in config%d run%d alldet",iconfig,irun));
       htreeall->Branch("iconfig",&oconfig);
       htreeall->Branch("irun",&orun);
@@ -791,6 +809,9 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("sourcez",&osourcez);
       htreeall->Branch("sourceeng",&osourceeng);
       htreeall->Branch("bestis",&obestis);
+#ifdef DIFFTOTE
+      htreeall->Branch("Etot",&oEtot);
+#endif
 
       for(int iety=0; iety<MaxEntry; iety++){ // loop entries
 
@@ -822,6 +843,9 @@ void AGATA::CombEvtHitsfiles(){
 	      for(float z : *obj[detid].isourcez) osourcez.push_back(z);
 	      for(float eng : *obj[detid].isourceeng) osourceeng.push_back(eng);
 	      obestis = obj[detid].ibestis;
+#ifdef DIFFTOTE
+	      oEtot = obj[detid].iEtot;
+#endif
 	      
 	      htreeall->Fill();
 	      ovhcid.clear();
@@ -887,6 +911,9 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<float> *isourcez = 0;
     vector<float> *isourceeng = 0;
     int            ibestis;
+#ifdef DIFFTOTE
+    float          iEtot;
+#endif
   };
 
   OBJ obj;
@@ -957,6 +984,9 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     htree->SetBranchAddress("sourcez",       &obj.isourcez);
     htree->SetBranchAddress("sourceeng",     &obj.isourceeng);
     htree->SetBranchAddress("bestis",        &obj.ibestis);
+#ifdef DIFFTOTE
+    htree->SetBranchAddress("Etot",          &obj.iEtot);
+#endif
 
     htree->GetEntry(Nevts-1);
     MaxEntry=obj.ientry;
@@ -981,6 +1011,9 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<float>          sourcez;
     vector<float>          sourceeng;
     int                    bestis;
+#ifdef DIFFTOTE
+    float                  Etot;
+#endif
 
     idx = 0;
     for(int iety=0; iety<MaxEntry; iety++){ // loop entries
@@ -1035,6 +1068,9 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	    for(float z : *obj.isourcez) sourcez.push_back(z);
 	    for(float eng : *obj.isourceeng) sourceeng.push_back(eng);
 	    bestis = obj.ibestis;
+#ifdef DIFFTOTE
+	    Etot = obj.iEtot;
+#endif
 	  }
 	}
 
@@ -1051,6 +1087,9 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       EventHits* fEvent = new EventHits(SourceE, SourcePos);
       fEvent->SetIdx(iconfig,irun,iety);
       fEvent->SetBestis(bestis);
+#ifdef DIFFTOTE
+      fEvent->Etot = Etot;
+#endif
       
       for(int i=0; i<vdet.size(); i++){
 	int detid = vdet[i];
