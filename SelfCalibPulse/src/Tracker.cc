@@ -4,19 +4,19 @@
 #include "Tracker.hh"
 
 Tracker::Tracker(vector<Hit*>* hits){
-  Tracker(hits,-1);
+  Tracker(hits,-1000);
 }
 
-Tracker::Tracker(vector<Hit*>* hits, double E){
+Tracker::Tracker(vector<Hit*>* hits, float E){
   Tracker(hits, E, TVector3(0,0,0));
 }
 
-Tracker::Tracker(vector<Hit*>* hits, double E, TVector3 sourcepos){
+Tracker::Tracker(vector<Hit*>* hits, float E, TVector3 sourcepos){
 
   fHits = hits;
   nhits = fHits->size();
 
-  EGamma = E; //keV
+  EGamma = E / 1000.; //MeV
 
   sPos.SetXYZ(sourcepos.X()/10., sourcepos.Y()/10., sourcepos.Z()/10.); // change to cm
   
@@ -420,6 +420,9 @@ void Tracker::OFTtracking(){
   vector<vector<int>> interaction(MaxNDets);
   vector<double> probtot;
   for(int i=0; i<n; i++){ //loop clusters
+
+    //if(EGamma>0) et[i] = EGamma; //<------------- use source energy
+
     flagu[i]=0;
     flagpair[i]=0;
     interaction[i].clear();
@@ -529,7 +532,6 @@ Double_t calcComptonAngle(Double_t Ein, Double_t Edep){
 
   return acos(cosa);
 }
-
 
 // calculate best min chi2 with iteration for simple tracking
 void Tracker::CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
@@ -695,6 +697,8 @@ void Tracker::Simpletracking(){
   vector<double> chi2tot;
   vector<double> chi2tot2; // secondbestchi2
   for(int i=0; i<n; i++){ //loop clusters
+    //if(EGamma>0) et[i] = EGamma; //<------------- use source energy
+
     flagu[i]=0;
     interaction[i].clear();
 
@@ -764,6 +768,43 @@ void Tracker::Simpletracking(){
   FOM2 = chi2tot2[0];
   
   return;
+}
+
+
+
+// calculate chi2 of the track
+double Tracker::CalcChi2(){
+  double chi2 = 0;
+  if(track.size()<2) return -1;
+  
+  vector <TVector3> pos;  pos.push_back(TVector3(0,0,0));
+  vector <double> energy; energy.push_back(0);
+  double etotale = 0;
+  for(int i=0; i<track.size(); i++){
+    pos.push_back(Pos[track[i]]); // Pos relative to source
+    energy.push_back(e[track[i]]);
+    etotale += e[track[i]];
+  }
+  if(EGamma>0) etotale = EGamma;
+  
+
+  for(int i=0; i<track.size()-1; i++){
+  //for(int i=0; i<1; i++){
+
+    TVector3 mom01 = pos[i+1]-pos[i];
+    TVector3 mom12 = pos[i+2]-pos[i+1];
+    double angle = mom01.Angle(mom12);
+
+    double cangle = calcComptonAngle(etotale, energy[i+1]);
+
+    // doi:10.1016/j.nima.2004.06.154
+    double chi2tmp = exp(40. * fabs(cos(cangle) - cos(angle)) );
+    chi2 += chi2tmp;
+    
+    etotale -= energy[i+1];
+  }
+  
+  return chi2;
 }
 
 #endif

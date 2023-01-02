@@ -1,0 +1,7 @@
+#input 0
+nsource 2
+source  898 0 0 0
+source 1836 0 0 0
+path G4Sim/rootfiles3/noPS_88Y
+run 0 999
+nevt -1

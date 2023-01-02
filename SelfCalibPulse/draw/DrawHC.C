@@ -17,10 +17,10 @@
 #include <vector>
 
 // draw selection
-int detid = 15;
+int detid = 0;
 int segid = 2;
 int nhitslimit = 200;
-int Number = 3;
+int Number = 1;
 
 
 struct HitCollection{
@@ -32,6 +32,8 @@ struct HitCollection{
   float labpos[3];
   float detpos[3];
 
+  float devsigma[6];
+  
   vector<int> hid;
 };
 
@@ -122,8 +124,14 @@ void DrawHC(){
   int pscid;
 
   float labpos[3];
-
+  float devsigma[6];
+  
   // HitCollection
+  TFile *pscfile = new TFile(Form("PSCfiles/Det%04d.root",detid));
+  TTree *psctree = (TTree *)pscfile->Get(Form("tree%d",segid));
+
+  psctree->SetBranchAddress("devsigma",devsigma);
+
   TFile *hcfile = new TFile(Form("share/HCs/Det%04d.root",detid));
   TTree *hctree = (TTree *)hcfile->Get(Form("tree%d",segid));
 
@@ -138,6 +146,7 @@ void DrawHC(){
   for(ihc=0; ihc<Nhcs; ihc++){
     if(ihc%1000==0) cout<<"\r load "<<ihc<<" / "<<Nhcs<<" HitCollections..."<<flush;
     hctree->GetEntry(ihc);
+    psctree->GetEntry(ihc);
 
     HitCollection ahc;
     ahc.det = det;
@@ -154,6 +163,10 @@ void DrawHC(){
       ahc.detpos[it] = DetPos(it,0);
     }
 
+    for(int it=0; it<6; it++){
+      ahc.devsigma[it] = devsigma[it];
+    }
+    
     fAllHCs.push_back(ahc);
   }
   cout<<"\r load "<<ihc<<" / "<<Nhcs<<" HitCollections..."<<endl;
@@ -161,7 +174,7 @@ void DrawHC(){
   // Hit
   TChain *htree = new TChain();
   int minrun[3] = {   0,   0,   0};
-  int maxrun[3] = {5000,2500,2500};
+  int maxrun[3] = {  50,  25,  25};
   for(int input=0; input<3; input++){
     cout<<"chain input"<<input<<" run "<<minrun[input]<<" ~ "<<maxrun[input]<<endl;
     for(int run=minrun[input]; run<maxrun[input]; run++){
@@ -179,8 +192,8 @@ void DrawHC(){
   htree->SetBranchAddress("labpos",labpos);
 
   cout<<"start load Hits..."<<endl;
-  long long Nevts = htree->GetEntriesFast();
-  long long ievt, hid=0;
+  int Nevts = htree->GetEntriesFast();
+  int ievt, hid=0;
   for(ievt=0; ievt<Nevts; ievt++){
     if(ievt%1000==0) cout<<"\r load "<<ievt<<" / "<<Nevts<<" Hits..."<<flush;
     htree->GetEntry(ievt);
@@ -242,8 +255,8 @@ void DrawHC(){
       if(fAllHCs[ihc].nhits<nhitslimit) continue;
       if(r<15) continue;
       if(r>25) continue;
-      //if(!(phi>-3&&phi<2)) continue;
-      if(!(phi>15&&phi<30)) continue;
+      if(!(phi>-3&&phi<2)) continue;
+      //if(!(phi>15&&phi<30)) continue;
       dihc++;
       if(dihc==0) dihc = ihc;
     }
@@ -264,6 +277,9 @@ void DrawHC(){
   hxz->SetTitle(Form("Hits Z:X {Det%d, Seg%d, nhits-%d}",fAllHCs[dihc].det,fAllHCs[dihc].seg,fAllHCs[dihc].nhits));
   
   cout<<"Draw det"<<fAllHCs[dihc].det<<" seg"<<fAllHCs[dihc].seg<<" nhits-"<<fAllHCs[dihc].nhits<<endl;
+  cout<<"devsigma: ";
+  for(int it=0; it<6; it++) cout<<fAllHCs[dihc].devsigma[it]<<" ";
+  cout<<endl;
 
   //hnhits->Draw();
   TCanvas *c = new TCanvas("c","c",600,600);

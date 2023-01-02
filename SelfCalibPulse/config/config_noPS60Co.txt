@@ -1,0 +1,7 @@
+#input 0
+nsource 2
+source 1173 0 0 0
+source 1332 0 0 0
+path G4Sim/rootfiles3/noPS_60Co
+run 0 999
+nevt -1

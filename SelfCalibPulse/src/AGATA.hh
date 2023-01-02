@@ -54,7 +54,6 @@ public:
   void WriteEvtHitsfiles(int detid);
   void Load(string configfile);
   void CombEvtHitsfiles();
-  void LoadEvtHitsfiles(int iconfig);
   void LoadEvtHitsfiles2(int iconfig);
   void LoadEvtHitsconfigs();
   void ClearEvtHitsMem(); // clear EventHits in memory
@@ -70,18 +69,33 @@ public:
   int  FindHC(int detid, int segid, int pscid);
 
   int   InitPSCandHC(int detid, int segid);
+
   void  FindInitZone(PS *aps, vector<int> *initzone);
   void  FindInitPSC(Hit *ahit, vector<int> *initpsc);
+
   int   AddPS(PS *aps, Hit *ahit);
   int   AddPStoPSC(PS *aps, Hit *ahit, int ipsc);
+
   float FindMaxDev(PS *aps, Hit *ahit);
   void  FindDevCut();
+
+  void  FindDevSigma(PS *aps, Hit *ahit);
+  void  CalcDevSigma();
+
+  void  SetDivDir(int val){ DivDir=val;}
   void  FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone);
   int   AddPStoDiv(PS *aps, Hit *ahit);
+
+  int   CheckPSinPSC(PS *aps, Hit *ahit);
+  void  SetNSigma(int val){ nSigma = val; cout<<Form("nSigma = %.1f",nSigma)<<endl;}
+  float GetNSigma(){ return nSigma;}
+
+  void MakeCPulse();
+  
   void  RemoveMotherPSC();
   void  RemoveSmallPSC(int minhits);
-  
-  void RemovePSfromPSC(PS *aps, Hit *ahit); // remove ahit from all PSCs
+
+  void RemovePSfromPSC(PS *aps, Hit *ahit, int ipsc); // remove ahit from PSC(s)
   void RemovePSC(HitCollection *ahc);
 
   void Devseg(const float *apulse, const float *bpulse, float *dev); // calc deviation of two segment pulse shape
@@ -143,6 +157,12 @@ private:
   mutex PSCmtx[MaxNDets][NSeg]; // fPSC lock for threads
   mutex AllHCmtx;
   bool kAddNewPSC = true;
+  float nSigma = 3.;
+
+  vector<Int_t> HCMap[MaxNDets][NSeg];
+  Int_t         HCstat[MaxNDets][NSeg][2]; // 0: fHCs size, 1: fHCs max idx
+
+  int DivDir = -1; // divide direction -1:all, 0:seg-core, 1:sector, 2:slice
   
   // EventHits
   int nConfig = 0;
@@ -159,6 +179,7 @@ private:
   TTree *Trtree;
   int  Trnhits;
   bool TrSource;  // if start from source
+  float TrSourceE;
   float TrSourcePos[3];
   bool TrCorrect;
   double TrFOM1;
@@ -193,7 +214,8 @@ private:
   float dist2;         // dist calpos2 - labpos
 
   float spulse[NSegCore][NSig];  // average pulse shape
-
+  float devsigma[NSeg_comp];     // standard deviation of compared segment
+  
   int npaths;
 
   // set tree branch

@@ -212,6 +212,11 @@ int main(int argc, char* argv[]){
     agata->CheckPSCstat(PSCstat);
     while(PSCstat[0]>MAXHITS){
       cout<<"\033[1;31m"<<"Divide "<<ndiv<<": \033[0m"<<endl;
+
+      int DivDir = ndiv%3;
+      if(DivDir<0) cout<<"divide in all direction..."<<endl;
+      else         cout<<"divide in direction "<<DivDir<<endl;
+      if(kConfig) agata->SetDivDir(DivDir);
       
       time(&stepstart);
       if(kConfig) treereader->GenerateHCs(1,agata);
@@ -238,6 +243,51 @@ int main(int argc, char* argv[]){
 	  <<"\033[0m"<<endl<<endl;
       ndiv++;
     }
+
+    time(&stepstart);
+    if(kConfig) treereader->GenerateHCs(3,agata);
+    if(kConfig) agata->CalcDevSigma();
+    time(&stepstop);
+    printf("=== FindDevSigma time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+    
+    // remove strange PS from PSC
+    int nremove = 0;
+    bool kRemove = true;
+    while(kRemove && nremove<0){
+      cout<<"\033[1;31m"<<"Remove strange PS "<<nremove<<": \033[0m"<<endl;
+      if(nremove<2) agata->SetNSigma(2.);
+      else          agata->SetNSigma(3.);
+      
+      time(&stepstart);
+      if(kConfig) agata->MakeCPulse();
+      if(kConfig) treereader->GenerateHCs(4,agata);
+      time(&stepstop);
+      printf("=== Remove strange PS time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+      kRemove = false;
+      if( treereader->GetRemovePSNumber() > 0 ) kRemove = true;
+
+      time(&stepstart);
+      if(kConfig) agata->RemoveSmallPSC(MINHITS);
+      time(&stepstop);
+      printf("=== Remove PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+      
+      agata->CheckPSCstat(PSCstat);
+      cout<<"\033[1m"<<"PSC stats:"
+	  <<"  maxnhits = "<<PSCstat[0]
+	  <<" ; nPSC = "<<PSCstat[1]
+	  <<" ; nEmpty = "<<PSCstat[2]
+	  <<"\033[0m"<<endl<<endl;
+
+      time(&stepstart);
+      if(kConfig) treereader->GenerateHCs(3,agata);
+      if(kConfig) agata->CalcDevSigma();
+      time(&stepstop);
+      printf("=== FindDevSigma time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
+
+      nremove++;
+    }
+
     
     // save grouped HCs and Hits
     time(&stepstart);

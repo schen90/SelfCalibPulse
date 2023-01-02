@@ -15,8 +15,8 @@ class Tracker {
 
 public:
   Tracker(vector<Hit*>* hits);
-  Tracker(vector<Hit*>* hits, double E);
-  Tracker(vector<Hit*>* hits, double E, TVector3 sourcepos);
+  Tracker(vector<Hit*>* hits, float E);
+  Tracker(vector<Hit*>* hits, float E, TVector3 sourcepos);
   virtual ~Tracker();
 
   vector<int> GetTrack(){ return track;}
@@ -34,12 +34,14 @@ public:
   void CalcMinChi2(vector<TVector3> &pos, vector<int> &intid, vector<double> &energy,
 		   double etotale, vector<int> &order, double bestchi2[]);
 
+
+  double CalcChi2();
   
 private:
   vector<Hit*>* fHits; // Hits from one event
   int nhits;
 
-  double EGamma; // keV gamma energy for calibration, -1 means unknown energy
+  double EGamma; // MeV gamma energy for calibration, -1 means unknown energy
 
   vector<int> track; // the most likely order of Hits
 

@@ -57,17 +57,17 @@ public:
   virtual void GenerateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
 				 int ientry, long long nentries);
 
-  virtual void FindMaxDevworker(int iconfig, int run, int iChain, AGATA *agata,
-				int ientry, long long nentries, long long &istart);
+  virtual void FindDevworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
+			     int ientry, long long nentries, long long &istart);
 
-  virtual void UpdateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
+  virtual void UpdateHCsworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
 			       int ientry, long long nentries, long long &istart);
 
   Double_t GetTotalSystemMemory();
   Double_t GetCurrentMemoryUsage();
   void SetMaxMemUsage(double value){ MaxMemUsage = value;}
 
-  void SetGroupPos(bool val){ kGroupPos = val;}
+  int GetRemovePSNumber(){ return cRemovePS;}
   
 private:
   TChain* fChain[NChain]; //!pointer to the analyzed tree
@@ -79,23 +79,22 @@ private:
 #endif
 
   atomic_int cDivPS;
+  atomic_int cRemovePS;
   atomic_int cNotMatch;
 
   int nConfig = 0;
-  vector<float> fSourceE;
-  vector<TVector3> fSourcePos;
+  vector<int>              NSource;
+  vector<vector<float>>    fSourceE;
+  vector<vector<TVector3>> fSourcePos;
   vector<string> path;
   vector<int> MinRun;
   vector<int> MaxRun;
   vector<long long> Nevts;
 
-  bool kWithPS = true;
-  bool kGroupPos = false;
-  
   Double_t MaxMemUsage = 50; // max memory usage %
 
-  float SourceE;
-  TVector3 SourcePos;
+  vector<float> SourceE;
+  vector<TVector3> SourcePos;
   
   struct OBJ{
     // Declaration of leaf types

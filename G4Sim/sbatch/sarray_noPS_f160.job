@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --job-name=G4sim_f160_noPS            # Job name
+#SBATCH --mail-type=END,FAIL                  # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=sidong.chen@york.ac.uk    # Where to send mail
+#SBATCH --ntasks=1                            # Run on a single CPU
+#SBATCH --mem=600mb                           # Job memory request
+#SBATCH --time=01:20:00                       # Time limit hrs:min:sec
+#SBATCH --output=log_f160/G4sim_%A_%a.log     # Standard output and error log
+#SBATCH --account=phys-agata-2022             # Project account
+####SBATCH --array=0-249%20                      # Array range
+####SBATCH --array=0-499%20                      # Array range
+#SBATCH --array=250-2499%20                   # Array range
+####SBATCH --array=1000-1999%20                    # Array range
+####SBATCH --array=2000-2499%20                    # Array range
+
+runNo=$SLURM_ARRAY_TASK_ID
+sleeptime=$(($(($runNo%20))*5))
+
+sleep $sleeptime
+
+echo sleep $sleeptime
+echo My working directory is `pwd`
+echo Running array job index $SLURM_ARRAY_TASK_ID, on host:
+echo -e '\t'`hostname` at `date`
+echo
+
+module load devel/CMake/3.16.4-GCCcore-9.3.0 phys/Geant4/10.05.p01-foss-2020a phys/ROOT/6.22.02-foss-2020a-Python-3.8.2
+
+obj=/users/sc2950/scratch/agata/trunk/build/Agata
+mac=G4mac/sim1gamma_f160.mac
+
+($obj -seed -Path ./trunk_f160/ -b $mac -run $runNo)
+
+./macros/MakeDataG4_noPS trunk_f160/GammaEvents.$(printf "%04d" $runNo) rootfiles3/noPS_f160/G4SimData$(printf "%04d" $runNo).root
+
+rm -f trunk_f160/GammaEvents.$(printf "%04d" $runNo)
+
+echo
+echo Job completed at `date`
