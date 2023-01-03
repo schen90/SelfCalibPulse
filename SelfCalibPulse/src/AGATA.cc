@@ -84,7 +84,13 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
     if(detid>-1 && idet!=detid) continue;
-    idlist.push_back(idet);
+
+    int nsize = 0;
+    for(int iseg=0; iseg<NSeg; iseg++)  nsize += fHCs[idet][iseg]->size();
+
+    if(nsize>0){
+      idlist.push_back(idet);
+    }
   }
   string pscfilesname0 = "./PSCfiles/tmp/Det";
   string pscfilesname = "./PSCfiles/Det";
@@ -168,13 +174,14 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
   ClearPSCMem();
   //ClosePSCFiles();
 
+  string pscfilesname = "PSCfiles/Det";
   vector <int> idlist; // detid list to load
   for(int idet=0; idet<NDets; idet++){
     if(detid>-1 && idet!=detid) continue;
+    string pscfilename0 = (string) Form("%s%04d.root",pscfilesname.c_str(),idet);
+    if(gSystem->AccessPathName(pscfilename0.c_str())) continue;
     idlist.push_back(idet);
   }
-  string pscfilesname = "PSCfiles/Det";
-  //if(Detid>-1) pscfilesname = "./share/PSCs/Det";
   cout<<"\e[1;33m Load Pulse Shape Collections from "<<pscfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
@@ -280,7 +287,13 @@ void AGATA::WriteHCfiles(int detid){
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
     if(detid>-1 && idet!=detid) continue;
-    idlist.push_back(idet);
+
+    int nsize = 0;
+    for(int iseg=0; iseg<NSeg; iseg++)  nsize += fHCs[idet][iseg]->size();
+
+    if(nsize>0){
+      idlist.push_back(idet);
+    }
   }
   string hcfilesname = "./share/HCs/Det";
   cout<<"\e[1;33m Create "<<hcfilesname;
@@ -341,12 +354,14 @@ void AGATA::LoadHCfiles(int detid){
 
   ClearHCMem();
 
+  string hcfilesname = "./share/HCs/Det";
   vector <int> idlist; // detid list to load
   for(int idet=0; idet<NDets; idet++){
     if(detid>-1 && idet!=detid) continue;
+    string hcfilename0 = (string) Form("%s%04d.root",hcfilesname.c_str(),idet);
+    if(gSystem->AccessPathName(hcfilename0.c_str())) continue;
     idlist.push_back(idet);
   }
-  string hcfilesname = "./share/HCs/Det";
   cout<<"\e[1;33m Load HitCollections from "<<hcfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
@@ -386,7 +401,12 @@ void AGATA::LoadHCfiles(int detid){
   for(int idet : idlist){
     for(int iseg=0; iseg<NSeg; iseg++){
       HCstat[idet][iseg][0] = fHCs[idet][iseg]->size();
-      HCstat[idet][iseg][1] = fHCs[idet][iseg]->back()->GetPid();
+
+      if(fHCs[idet][iseg]->size()>0){
+	HCstat[idet][iseg][1] = fHCs[idet][iseg]->back()->GetPid();
+      }else{
+	HCstat[idet][iseg][1] = 0;
+      }
 
       cout<<"\r fHCs["<<idet<<"]["<<iseg<<"]->"
 	  <<"at("<<HCstat[idet][iseg][0]-1<<")->Pid = "<<HCstat[idet][iseg][1]<<flush;
