@@ -281,7 +281,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 	<<" PSC-"<<PSCstat[1]
 	<<" maxnhits-"<<PSCstat[4]<<".."
 	<<"fEventHits-"<<NEventHits<<".."<<endl;
-
+    
   }else if(opt==1){ // find max dev
     cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
 	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
@@ -422,19 +422,28 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 	  kInterrupt = 1;
 	  break;
 	}
-
+	
 	time(&start);
 	kcout = true;
       }
 
       // work on entry
       int multi = 0;
-      if     (opt==0) multi=GenerateHCsworker(iconfig, run, iChain, agata, ientry, nentries);
-      else if(opt==1) multi=FindDevworker( 0, iconfig, run, iChain, agata, ientry, nentries, istart); // find absdev
-      else if(opt==2) multi=UpdateHCsworker( 0, iconfig, run, iChain, agata, ientry, nentries, istart); // divide HCs
-      else if(opt==3) multi=FindDevworker( 1, iconfig, run, iChain, agata, ientry, nentries, istart); // find dev
-      else if(opt==4) multi=UpdateHCsworker( 1, iconfig, run, iChain, agata, ientry, nentries, istart); // remove strange PS from PSCs
-      ientry += multi;
+      if     (opt==0) multi=GenerateHCsworker(  iconfig, run, iChain, agata, ientry, nentrytmp);
+      else if(opt==1) multi=FindDevworker(   0, iconfig, run, iChain, agata, ientry, nentrytmp, istart); // find absdev
+      else if(opt==2) multi=UpdateHCsworker( 0, iconfig, run, iChain, agata, ientry, nentrytmp, istart); // divide HCs
+      else if(opt==3) multi=FindDevworker(   1, iconfig, run, iChain, agata, ientry, nentrytmp, istart); // find dev
+      else if(opt==4) multi=UpdateHCsworker( 1, iconfig, run, iChain, agata, ientry, nentrytmp, istart); // remove strange PS from PSCs
+
+      {
+#ifdef NTHREADS
+	lock_guard<mutex> lock(treemtx); // lock tree read
+#endif
+	ientry += multi;
+	ievt   += multi;
+	if(ievt>=nentries) return;
+      }
+
     }//end of loop evts
 
   }//end of loop runs
@@ -445,17 +454,6 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 
 int TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA *agata,
 				       int ientry, long long nentries){
-
-  // get entry-------------------------------------------------------------
-  {
-#ifdef NTHREADS
-    lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-    if(ievt>=nentries) return 1;
-    if(ientry>=nentries) return 1;  
-
-    ievt++;
-  }
 
   // get PS in one event-----------------------------------
   vector<PS> fPS;
@@ -617,8 +615,6 @@ int TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA *
 int TreeReaderPulse::FindDevworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
 				   int ientry, long long nentries, long long &istart){
 
-  if(ievt>=nentries) return 1;
-  
   // find Hit-----------------------------------------------
   long long iEvtHit = agata->FindiEvtHit(iconfig, run, ientry, istart);
   if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return 1;}
@@ -640,15 +636,6 @@ int TreeReaderPulse::FindDevworker(int opt, int iconfig, int run, int iChain, AG
 
   // find corresponding fPS
   vector<PS> fPS;
-  {
-#ifdef NTHREADS
-    lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-    if(ievt>=nentries) return 1;
-    if(ientry>=nentries) return 1;  
-
-    ievt++;
-  }
 
   fChain[iChain]->GetEntry(ientry);
   int multi = 0;
@@ -709,8 +696,6 @@ int TreeReaderPulse::FindDevworker(int opt, int iconfig, int run, int iChain, AG
 int TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
 				     int ientry, long long nentries, long long &istart){
 
-  if(ievt>=nentries) return 1;
-  
   // find Hit-----------------------------------------------
   long long iEvtHit = agata->FindiEvtHit(iconfig, run, ientry, istart);
   if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return 1;}
@@ -774,15 +759,6 @@ int TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain, 
 
   // find corresponding fPS
   vector<PS> fPS;
-  {
-#ifdef NTHREADS
-    lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-    if(ievt>=nentries) return 1;
-    if(ientry>=nentries) return 1;  
-
-    ievt++;
-  }
 
   fChain[iChain]->GetEntry(ientry);
   int multi = 0;

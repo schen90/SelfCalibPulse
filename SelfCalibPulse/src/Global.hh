@@ -28,7 +28,7 @@ using namespace std;
 //#define SINGLEHIT
 #define PSCEMIN 0. // keV, PSC greate with PS Energy > PSCEMIN
 #define MINHITS 10    // min nhits for a good HC
-#define MAXHITS 1000  // max nhit for a HC
+#define MAXHITS 500  // max nhit for a HC
 #define SHORT
 
 // agata
