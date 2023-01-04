@@ -229,6 +229,17 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
   }
   
   // statistics in total
+  long long nevents = 0;
+  for(int run=MinRun[iconfig]; run<=MaxRun[iconfig]; run++){
+    fChain[0]->Reset();
+    fChain[0]->AddFile(Form("%s/Tree_%04d.root",path[iconfig].c_str(),run),0,"TreeMaster");
+    Init(0);
+    long tmpnentries = fChain[0]->GetEntriesFast();
+    fChain[0]->GetEntry(tmpnentries-1);
+    nevents += obj[0].EntryID+1;
+  }
+  if(nevts>0) nevents = TMath::Min(nevents,nevts);
+
   fChain[0]->Reset();
   for(int run=MinRun[iconfig]; run<=MaxRun[iconfig]; run++){
     fChain[0]->AddFile(Form("%s/Tree_%04d.root",path[iconfig].c_str(),run),0,"TreeMaster");
@@ -236,15 +247,15 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
   Init(0);
 
   long long nentries = fChain[0]->GetEntriesFast();
-  if(nevts>0) nentries = TMath::Min(nentries,nevts);
   irun = MinRun[iconfig];
   ievt = 0;
 
-  cout<<"\e[1;33m Read "<<nentries<<" entries from rootfiles "<<Form("%s/Tree_%04d ~ %04d",path[iconfig].c_str(),MinRun[iconfig],MaxRun[iconfig])<<" ... \e[0m"<<endl;
+  cout<<"\e[1;33m Read "<<nentries<<" entries ( "<<nevents<<" events ) from rootfiles "
+      <<Form("%s/Tree_%04d ~ %04d",path[iconfig].c_str(),MinRun[iconfig],MaxRun[iconfig])<<" ... \e[0m"<<endl;
 
   // Loop entries-------------------------------------------
 #ifndef NTHREADS
-  GenerateHCsLoop(opt, iconfig, 0, agata, nentries);
+  GenerateHCsLoop(opt, iconfig, 0, agata, nevents);
 
 #else
   // loop trees with multi threads
@@ -252,7 +263,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
   cout<<"using "<<NTHREADS<<" threads:"<<endl;
   
   for(int i=0; i<NTHREADS; i++){
-    th[i] = thread(&TreeReaderPulse::GenerateHCsLoop, this, opt, iconfig, i, ref(agata),nentries);
+    th[i] = thread(&TreeReaderPulse::GenerateHCsLoop, this, opt, iconfig, i, ref(agata),nevents);
   }
 
   for(int i=0; i<NTHREADS; i++){
@@ -274,7 +285,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 
 
   if(opt==0){ // initial PSC
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+    cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
@@ -283,7 +294,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 	<<"fEventHits-"<<NEventHits<<".."<<endl;
     
   }else if(opt==1){ // find max dev
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+    cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
@@ -292,7 +303,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 	<<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<".."<<endl;
 
   }else if(opt==2){ // divide PSC
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+    cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
@@ -302,7 +313,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 	<<" maxndiv-"<<PSCstat[8]<<".."<<endl;
 
   }else if(opt==3){ // find dev sigma
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+    cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
@@ -310,7 +321,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 	<<" maxnhits-"<<PSCstat[4]<<".."<<endl;
 
   }else if(opt==4){ // remove PS
-    cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+    cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	<<"PS-"<<PSCstat[0]
@@ -324,7 +335,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 
 
 // loop opt=0: generate initial PSC; opt=1: findmaxdev; opt=2: dividepsc
-void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *agata, long long nentries){
+void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *agata, long long nevents){
   
   long long PSCstat[10];
   time(&start);
@@ -373,7 +384,7 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 	double MemUsage = MemUsageGB / MemTotalGB * 100;
 
 	if(opt==0){ // initial PSC
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	  cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
@@ -381,7 +392,7 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 	      <<" maxnhits-"<<PSCstat[4]<<".."<<flush;
 
 	}else if(opt==1){ // find max absdev
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	  cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
@@ -390,7 +401,7 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 	      <<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<".."<<flush;
 
 	}else if(opt==2){ // divide PSC
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	  cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
@@ -400,7 +411,7 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 	      <<" maxndiv-"<<PSCstat[8]<<".."<<flush;
 
 	}else if(opt==3){ // find dev sigma
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	  cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
@@ -408,7 +419,7 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 	      <<" maxnhits-"<<PSCstat[4]<<".."<<flush;
 
 	}else if(opt==4){ // remove PS
-	  cout<<"\r finish read "<<ievt<<" / "<<nentries<<" evts"
+	  cout<<"\r finish read "<<ievt<<" / "<<nevents<<" evts"
 	      <<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
 	      <<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
 	      <<"PS-"<<PSCstat[0]
@@ -439,9 +450,10 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 #ifdef NTHREADS
 	lock_guard<mutex> lock(treemtx); // lock tree read
 #endif
+	if(ievt>=nevents) return;
 	ientry += multi;
-	ievt   += multi;
-	if(ievt>=nentries) return;
+	ievt++;
+	if(ievt>=nevents) return;
       }
 
     }//end of loop evts
@@ -546,7 +558,7 @@ int TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA *
   // create Hit-----------------------------------------------
   vector<int> uflag;
   EventHits* fEvent = new EventHits(SourceE, SourcePos);
-  fEvent->SetIdx(iconfig,run,ientry);
+  fEvent->SetIdx(iconfig,run,ientry,EvtID);
 
 #ifdef DIFFTOTE
   fEvent->Etot = Etot;
@@ -779,6 +791,7 @@ int TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain, 
     
     int segidx = -1;
     PS aps = GetAPS(iChain, false, segidx); // aps w/ PS
+
     if(aps.det<0) return fHits->size();
     fPS.push_back(aps);
     ihit++;
@@ -835,7 +848,12 @@ PS TreeReaderPulse::GetAPS(int iChain, bool skipPS, int &segidx){
     segidx = veng.size(); // multi-segment fired
     return aps;// require only 1 seg fired in a det
   }
-
+  if(segidx<0 && veng.size()==1){
+    if( !(fabs(veng[0]-obj[iChain].CoreE[0])<3) ){
+      segidx = veng.size(); // multi-segment hit below threshold
+      return aps;// require only 1 seg fired in a det
+    }
+  }
 
   int idx;
   if(segidx<0) idx = 0;

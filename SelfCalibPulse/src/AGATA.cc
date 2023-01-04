@@ -73,7 +73,6 @@ void AGATA::WritePSCfiles(){
   for(int idet=0; idet<NDets; idet++){
     LoadPSCfiles(idet);
     WritePSCfiles(idet);
-    cout<<endl;
   }
 }
 
@@ -92,6 +91,8 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
       idlist.push_back(idet);
     }
   }
+  if(idlist.size()==0) return;
+
   string pscfilesname0 = "./PSCfiles/tmp/Det";
   string pscfilesname = "./PSCfiles/Det";
   //if(Detid>-1) pscfilesname = "./share/PSCs/Det";
@@ -159,7 +160,7 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
     gROOT->ProcessLine(Form(".!mv -f %s%04d.root %s%04d.root", pscfilesname0.c_str(),idet, pscfilesname.c_str(),idet));
   }
 
-  cout<<"\e[1;33m Write "<<cPSCfile<<" PSC to files \e[0m"<<endl;
+  cout<<"\e[1;33m Write "<<cPSCfile<<" PSC to files \e[0m"<<endl<<endl;
   
   //ClearPSCMem();
   return;
@@ -182,6 +183,8 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
     if(gSystem->AccessPathName(pscfilename0.c_str())) continue;
     idlist.push_back(idet);
   }
+  if(idlist.size()==0) return;
+
   cout<<"\e[1;33m Load Pulse Shape Collections from "<<pscfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
@@ -295,6 +298,8 @@ void AGATA::WriteHCfiles(int detid){
       idlist.push_back(idet);
     }
   }
+  if(idlist.size()==0) return;
+
   string hcfilesname = "./share/HCs/Det";
   cout<<"\e[1;33m Create "<<hcfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
@@ -362,6 +367,8 @@ void AGATA::LoadHCfiles(int detid){
     if(gSystem->AccessPathName(hcfilename0.c_str())) continue;
     idlist.push_back(idet);
   }
+  if(idlist.size()==0) return;
+
   cout<<"\e[1;33m Load HitCollections from "<<hcfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
@@ -449,14 +456,22 @@ void AGATA::WriteEvtHitsfiles(int detid){
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
     if(detid>-1 && idet!=detid) continue;
-    idlist.push_back(idet);
+
+    int nsize = 0;
+    for(int iseg=0; iseg<NSeg; iseg++)  nsize += fHCs[idet][iseg]->size();
+
+    if(nsize>0){
+      idlist.push_back(idet);
+    }
   }
+  if(idlist.size()==0) return;
+
   cout<<"\e[1;33m Create hit files for Det";
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
 
   
-  int iconfig = -1, irun = -1, ientry = -1;
+  int iconfig = -1, irun = -1, ientry = -1, ievent = -1;
   int tmpconfig, tmprun;
 
   string hfilename;
@@ -489,7 +504,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 
   for(ievt=0; ievt<fEventHits->size(); ievt++){ // loop events
     EventHits *fEvent = fEventHits->at(ievt);
-    fEvent->GetIdx(tmpconfig, tmprun, ientry);
+    fEvent->GetIdx(tmpconfig, tmprun, ientry, ievent);
 
     if(tmpconfig!=iconfig || tmprun!=irun){ // open new file
       for(int idet : idlist){
@@ -508,6 +523,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("iconfig",&iconfig);
 	htree[idet]->Branch("irun",&irun);
 	htree[idet]->Branch("ientry",&ientry);
+	htree[idet]->Branch("ievent",&ievent);
 	htree[idet]->Branch("det",&det);
 	htree[idet]->Branch("seg",&seg);
 
@@ -643,6 +659,7 @@ void AGATA::CombEvtHitsfiles(){
     int          iconfig;
     int          irun;
     int          ientry;
+    int          ievent;
     int          idet;
     int          iseg;
 
@@ -703,6 +720,7 @@ void AGATA::CombEvtHitsfiles(){
       cout<<"\r \e[1;33m Load Hits from "<<hfilename0<<"... \e[0m"<<flush;
 
       int MaxEntry = -1;
+      int MaxEvent = -1;
       for(int detid=0; detid<NDets; detid++){
 
 	if(idx[detid]<0){ 
@@ -716,6 +734,7 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("iconfig",       &obj[detid].iconfig);
 	htree[detid]->SetBranchAddress("irun",          &obj[detid].irun);
 	htree[detid]->SetBranchAddress("ientry",        &obj[detid].ientry);
+	htree[detid]->SetBranchAddress("ievent",        &obj[detid].ievent);
 	htree[detid]->SetBranchAddress("det",           &obj[detid].idet);
 	htree[detid]->SetBranchAddress("seg",           &obj[detid].iseg);
 
@@ -735,14 +754,16 @@ void AGATA::CombEvtHitsfiles(){
 
 	htree[detid]->GetEntry(Nevts[detid]-1);
 	if(obj[detid].ientry>MaxEntry) MaxEntry=obj[detid].ientry;
+	if(obj[detid].ievent>MaxEvent) MaxEvent=obj[detid].ievent;
 
 	htree[detid]->GetEntry(idx[detid]);
       }
 
       MaxEntry += 1;
+      MaxEvent += 1;
 
       hfileall->cd();
-      int oconfig, orun, oentry, odet, oseg;
+      int oconfig, orun, oentry, oevent, odet, oseg;
       vector<int>    ovhcid;
       float          odepE;
       float          ocalpos[3];
@@ -760,6 +781,7 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("iconfig",&oconfig);
       htreeall->Branch("irun",&orun);
       htreeall->Branch("ientry",&oentry);
+      htreeall->Branch("ievent",&oevent);
       htreeall->Branch("det",&odet);
       htreeall->Branch("seg",&oseg);
 
@@ -777,19 +799,20 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("Etot",&oEtot);
 #endif
 
-      for(int iety=0; iety<MaxEntry; iety++){ // loop entries
+      for(int ievent=0; ievent<MaxEvent; ievent++){ // loop entries
 
 	// find hits belong to the same entry
 	for(int detid=0; detid<NDets; detid++){
 
 	  if(idx[detid]<0) continue;
 
-	  while(obj[detid].ientry<=iety){
+	  while(obj[detid].ievent<=ievent){
 
-	    if(iety==obj[detid].ientry){
+	    if(ievent==obj[detid].ievent){
 	      oconfig = obj[detid].iconfig;
 	      orun = obj[detid].irun;
 	      oentry = obj[detid].ientry;
+	      oevent = obj[detid].ievent;
 	      odet = obj[detid].idet;
 	      oseg = obj[detid].iseg;
 
@@ -854,6 +877,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
     //int          iconfig;
     //int          irun;
     int          ientry;
+    int          ievent;
     int          idet;
     int          iseg;
 
@@ -875,7 +899,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
   OBJ obj;
 
   string hfilename0;
-  int idx, Nevts;
+  int idx, Netys;
 
   // check exist
   hfilename0 = (string) Form("./share/Hits/input%d",iconfig);
@@ -912,17 +936,19 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."<<"\e[0m"<<flush;
 
     int MaxEntry = -1;
+    int MaxEvent = -1;
 
     htree = (TTree *)hfile->Get("tree");
     if(!htree){
       hfile->Close();
       continue;
     }
-    Nevts = htree->GetEntriesFast();
+    Netys = htree->GetEntriesFast();
 	
     //htree->SetBranchAddress("iconfig",       &obj.iconfig);
     //htree->SetBranchAddress("irun",          &obj.irun);
     htree->SetBranchAddress("ientry",        &obj.ientry);
+    htree->SetBranchAddress("ievent",        &obj.ievent);
     htree->SetBranchAddress("det",           &obj.idet);
     htree->SetBranchAddress("seg",           &obj.iseg);
 
@@ -940,11 +966,13 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
     htree->SetBranchAddress("Etot",          &obj.iEtot);
 #endif
 
-    htree->GetEntry(Nevts-1);
-    MaxEntry=obj.ientry;
+    htree->GetEntry(Netys-1);
+    MaxEntry = obj.ientry;
+    MaxEvent = obj.ievent;
 
     MaxEntry += 1;
-    if(MaxEntry>0) NevtsTotal += MaxEntry;
+    MaxEvent += 1;
+    if(MaxEvent>0) NevtsTotal += MaxEvent;
 
     vector<int>            vdet;
     vector<int>            vseg;
@@ -964,8 +992,9 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 #endif
 
     idx = 0;
-    for(int iety=0; iety<MaxEntry; iety++){ // loop entries
-      //if(iety%10==0) cout<<"\r ientry = "<<iety<<flush;
+    int ientry;
+    for(int ievent=0; ievent<MaxEvent; ievent++){ // loop entries
+
       vdet.clear();
       vseg.clear();
 
@@ -980,12 +1009,14 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
       sourceeng.clear();
 
       // find hits belong to the same entry
-      for(; idx<Nevts; idx++){
+      for(; idx<Netys; idx++){
 
 	htree->GetEntry(idx);
-	if(obj.ientry>iety) break;
+	if(obj.ievent>ievent) break;
 	
-	if(iety==obj.ientry){
+	if(ievent==obj.ievent){
+
+	  ientry = obj.ientry;
 
 	  vdet.push_back(obj.idet);
 	  vseg.push_back(obj.iseg);
@@ -1012,6 +1043,8 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 
       }
 
+      //if(vdet.size()==1) {cout<<"vdet.size = 1!!!!"<<endl;}
+      if(vdet.size()<2) continue;
 
       // make EventHits
       vector<float> SourceE;
@@ -1021,7 +1054,7 @@ void AGATA::LoadEvtHitsfiles(int iconfig){
 	SourcePos.push_back(TVector3(sourcex[is],sourcey[is],sourcez[is]));
       }
       EventHits* fEvent = new EventHits(SourceE, SourcePos);
-      fEvent->SetIdx(iconfig,irun,iety);
+      fEvent->SetIdx(iconfig,irun,ientry,ievent);
       fEvent->SetBestis(bestis);
 #ifdef DIFFTOTE
       fEvent->Etot = Etot;
@@ -2164,10 +2197,10 @@ void AGATA::SortEventHits(){
   // sort EventHits increasing iconfig, irun, ientry
   sort( fEventHits->begin(), fEventHits->end(),
 	[](EventHits* lEvt, EventHits* rEvt){
-	  int lconfig, lrun, lentry;
-	  int rconfig, rrun, rentry;
-	  lEvt->GetIdx(lconfig,lrun,lentry);
-	  rEvt->GetIdx(rconfig,rrun,rentry);
+	  int lconfig, lrun, lentry, levent;
+	  int rconfig, rrun, rentry, revent;
+	  lEvt->GetIdx(lconfig,lrun,lentry,levent);
+	  rEvt->GetIdx(rconfig,rrun,rentry,revent);
 
 	  return ((lconfig<rconfig) ||
 		  (lconfig==rconfig && lrun<rrun) ||
@@ -2186,13 +2219,13 @@ long long AGATA::AddEventHits(EventHits* fEvent){
 
 long long AGATA::FindiEvtHit(int iconfig, int irun, int ientry, long long &istart){
   long long iEvtHit = -1;
-  int tmpconf, tmprun, tmpetry;
+  int tmpconf, tmprun, tmpety, tmpevt;
   for(long long i=istart; i<fEventHits->size(); i++){
-    fEventHits->at(i)->GetIdx(tmpconf, tmprun, tmpetry);
+    fEventHits->at(i)->GetIdx(tmpconf, tmprun, tmpety, tmpevt);
 
     if(tmpconf<iconfig) continue; else if(tmpconf>iconfig) break;
     if(tmprun<irun)     continue; else if(tmprun>irun)     break;
-    if(tmpetry<ientry)  continue; else if(tmpetry>ientry)  break;
+    if(tmpety<ientry)   continue; else if(tmpety>ientry)   break;
 
     istart = iEvtHit = i;
     break;

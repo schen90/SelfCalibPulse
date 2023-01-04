@@ -37,8 +37,8 @@ public:
   void SetBestis(int val){ bestis = val;}
   int  GetBestis(){ return bestis;}
   
-  void SetIdx(int val1, int val2, int val3){ icfg=val1; irun=val2; ievt=val3;}
-  void GetIdx(int &val1, int &val2, int &val3){ val1=icfg; val2=irun; val3=ievt;}
+  void SetIdx(int val1, int val2, int val3, int val4){ icfg=val1; irun=val2; iety=val3;; ievt=val4;}
+  void GetIdx(int &val1, int &val2, int &val3, int &val4){ val1=icfg; val2=irun; val3=iety; val4=ievt;}
 
 #ifdef DIFFTOTE
   float Etot;
@@ -48,6 +48,7 @@ private:
   // idx
   int icfg;
   int irun;
+  int iety;
   int ievt;
   
   vector<Hit*>* fhits; // hits in one event

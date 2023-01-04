@@ -319,13 +319,13 @@ int main(int argc, char* argv[]){
 
     }
 
-    /*
+
     // write to PSCfiles
     time(&stepstart);
     agata->WritePSCfiles();
     time(&stepstop);
     printf("=== WritePSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
-    */
+
   }
   
   time(&stop);
