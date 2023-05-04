@@ -136,10 +136,13 @@ public:
   void SetPSA(bool val){ kPSA = val;}
 
   void SetMaxNDiv(int val){ maxndiv = val;}
+
+  void SkipDetId(int val){ SkipDet[val]=true;}
   
 private:
   int Detid = -1;
   AGATAgeo *agatageo;
+  bool SkipDet[MaxNDets];
 
   Double_t MaxMemUsage = 50; // max memory usage %
   bool kPSA = false;

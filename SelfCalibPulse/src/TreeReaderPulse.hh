@@ -58,11 +58,15 @@ public:
   void SetMaxMemUsage(double value){ MaxMemUsage = value;}
 
   int GetRemovePSNumber(){ return cRemovePS;}
+
+  void SkipDetId(int val){ SkipDet[val]=true;}
   
 private:
   TChain* fChain[NChain]; //!pointer to the analyzed tree
 
   int Detid = -1;
+  bool SkipDet[MaxNDets];
+
   long long NEventHits; // size of fEventHits in AGATA.hh
 
   atomic_int cDivPS;

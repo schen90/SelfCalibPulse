@@ -1,0 +1,151 @@
+#input 0
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0008
+run 0 53
+nevt -1
+
+#input 1
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0009
+run 0 16
+nevt -1
+
+#input 2
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0010
+run 0 79
+nevt -1
+
+#input 3
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0011
+run 0 39
+nevt -1
+
+#input 4
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0012
+run 0 50
+nevt -1
+
+#input 5
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0013
+run 0 49
+nevt -1
+
+#input 6
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0014
+run 0 71
+nevt -1
+
+#input 7
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0015
+run 0 63
+nevt -1
+
+#input 8
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0016
+run 0 95
+nevt -1
+
+#input 9
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0017
+run 0 74
+nevt -1
+
+#input 10
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0018
+run 0 122
+nevt -1
+
+#input 11
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0019
+run 0 17
+nevt -1
+
+#input 12
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0020
+run 0 52
+nevt -1
+
+#input 13
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0021
+run 0 91
+nevt -1
+
+#input 14
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0022
+run 0 104
+nevt -1
+
+#input 15
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0023
+run 0 9
+nevt -1
+
+#input 16
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0024
+run 0 24
+nevt -1
+
+#input 17
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0027
+run 0 80
+nevt -1
+
+#input 18
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0030
+run 0 117
+nevt -1

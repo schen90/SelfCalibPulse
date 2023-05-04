@@ -27,6 +27,9 @@ using namespace std;
 TreeReaderPulse::TreeReaderPulse(int detid){
 
   Detid = detid;
+  for(int idet=0; idet<MaxNDets; idet++){
+    SkipDet[idet] = false;
+  }
   
   for(int i=0; i<NChain; i++){
     fChain[i] = new TChain();
@@ -550,13 +553,9 @@ int TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA *
 #ifdef DIFFTOTE
   float Etot = 0;
   for(int i=0; i<fPS.size(); i++) Etot += fPS[i].energy;
-  bool kskip = true;
-  for(int is=0; is<SourceE.size(); is++) if(fabs(Etot-SourceE[is])<DIFFTOTE) kskip = false;
-  if(kskip) return multi;
 #endif
 
   // create Hit-----------------------------------------------
-  vector<int> uflag;
   EventHits* fEvent = new EventHits(SourceE, SourcePos);
   fEvent->SetIdx(iconfig,run,ientry,EvtID);
 
@@ -577,44 +576,75 @@ int TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA *
     Hit *ahit = new Hit(fPS[i].det, fPS[i].seg, fPS[i].energy, initpos); //keV and mm
     
     fEvent->Add(ahit);
-    uflag.push_back(1);
   }
 
   long long iEvtHit = agata->AddEventHits(fEvent);
   vector<Hit*>* fHits = fEvent->GetfHits();
-  
-  int nsource = SourceE.size();
-  vector<int> atrack;
-  int bestis = 0;
-  double minchi2 = 1e9;
-  for(int is=0; is<nsource; is++){
-#ifdef DIFFTOTE
-    if( !(fabs(Etot-SourceE[is])<DIFFTOTE) ) continue;
-#endif
-    Tracker tracker(fHits, SourceE[is], SourcePos[is]);
-    tracker.OFTtracking();
-    //tracker.Simpletracking();
-    double tmpchi2 = tracker.CalcChi2();
-    if(tmpchi2>0 && tmpchi2<minchi2){
-      bestis = is;
-      minchi2 = tmpchi2;
-      atrack = tracker.GetTrack();
+  vector<int> sign = fEvent->GetSign();
+
+  // analysis clusters in tracking
+  int Nunsigned = sign.size();
+  int iclust = 0;
+  while(Nunsigned>1){
+    vector<Hit*>* tHits = new vector<Hit*>();
+    vector<int> hitid;
+    // add unused hits
+    for(int i=0; i<sign.size(); i++){
+      if(sign[i]<0){
+        tHits->push_back( fHits->at(i) );
+        hitid.push_back(i);
+      }
     }
-  }
-  fEvent->SetBestis(bestis);
+    if(tHits->size()<2){ delete tHits;  break;}
   
-#ifdef CHECKTRACK
-  // check track----------------------------------------------
-  for(int i=0; i<fPS.size(); i++) uflag[i] = 0;
-  if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
+    int nsource = SourceE.size();
+    vector<int> atrack;
+    int bestis = 0;
+    double minchi2 = 1e9;
+    for(int is=0; is<nsource; is++){ // try different sources
+      Tracker tracker(tHits, SourceE[is], SourcePos[is]);
+
+#ifdef DIFFTOTE
+#if    DIFFTOTE < 0 // DIFFTOTE<0 : only accept TotE match events
+      if( !(fabs(Etot-SourceE[is])<fabs(DIFFTOTE)) ) continue;
+#else   // DIFFTOTE>0 : if TotE match, put all hits in one clust
+      if( fabs(Etot-SourceE[is])<fabs(DIFFTOTE) ) tracker.SetOneClust(true);
 #endif
+#endif
+
+#ifdef ONECLUST
+      tracker.SetOneClust(true);
+#endif
+
+      tracker.OFTtracking();
+      //tracker.Simpletracking();
+      double tmpchi2 = tracker.CalcChi2();
+      if(tmpchi2>0 && tmpchi2<minchi2){
+	bestis = is;
+	minchi2 = tmpchi2;
+	atrack = tracker.GetTrack();
+      }
+    }
+    if(atrack.size()<2){ delete tHits; break;} // cannot find good track
+
+    fEvent->SetBestis( iclust, bestis);
+    for(int i=0; i<atrack.size(); i++){
+      int hid = hitid[atrack[i]];
+      sign[hid] = iclust;
+      fEvent->SignClust( iclust, hid);
+      Nunsigned--;
+    }
+    iclust++;
+    delete tHits;
+  }
+  
   
   // group PS-------------------------------------------------
   for(int i=0; i<fPS.size(); i++){ //loop fPS
 
     if(Detid>-1 && fPS[i].det!=Detid) continue; // one det mode
     if(fSegIdx[i]>-1) continue; // multi segment fired
-    if(uflag[i]!=1) continue;
+    if(sign[i]<0) continue;
 
     int tmp = agata->AddPS(&fPS[i], fHits->at(i)); // add to pulse shape collection
   }//end of loop fPS
@@ -712,38 +742,74 @@ int TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain, 
   long long iEvtHit = agata->FindiEvtHit(iconfig, run, ientry, istart);
   if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return 1;}
 
-  vector<Hit*>* fHits = agata->FindEventHits(iEvtHit)->GetfHits();
+  EventHits *fEvent = agata->FindEventHits(iEvtHit);
+  vector<Hit*>* fHits = fEvent->GetfHits();
+  vector<int> sign = fEvent->GetSign();
+
 #ifdef DIFFTOTE
-  float Etot = agata->FindEventHits(iEvtHit)->Etot;
+  float Etot = fEvent->Etot;
 #endif
-  vector<int> uflag;
-  for(int i=0; i<fHits->size(); i++){ //loop fPS
-    uflag.push_back(1);
-  }
+
   istart = iEvtHit;
 
-#ifdef CHECKTRACK
-  // check track----------------------------------------------
-  int nsource = SourceE.size();
-  vector<int> atrack;
-  int bestis = 0;
-  double minchi2 = 1e9;
-  for(int is=0; is<nsource; is++){
-#ifdef DIFFTOTE
-    if( !(fabs(Etot-SourceE[is])<DIFFTOTE) ) continue;
-#endif
-    Tracker tracker(fHits, SourceE[is], SourcePos[is]);
-    tracker.OFTtracking();
-    //tracker.Simpletracking();
-    double tmpchi2 = tracker.CalcChi2();
-    if(tmpchi2>0 && tmpchi2<minchi2){
-      bestis = is;
-      minchi2 = tmpchi2;
-      atrack = tracker.GetTrack();
+#ifdef CHECKTRACK  // check track----------------------------------------------
+  int Nunsigned = sign.size();
+  for(int i=0; i<Nunsigned; i++) sign[i] = -1; // remove previous clust
+  int iclust = 0;
+
+  // analysis clusters in tracking
+  while(Nunsigned>1){
+    vector<Hit*>* tHits = new vector<Hit*>();
+    vector<int> hitid;
+    // add unsigned hits
+    for(int i=0; i<sign.size(); i++){
+      if(sign[i]<0){
+        tHits->push_back( fHits->at(i) );
+        hitid.push_back(i);
+      }
     }
+    if(tHits->size()<2){ delete tHits;  break;}
+
+    int nsource = SourceE.size();
+    vector<int> atrack;
+    int bestis = 0;
+    double minchi2 = 1e9;
+    for(int is=0; is<nsource; is++){
+      Tracker tracker(tHits, SourceE[is], SourcePos[is]);
+
+#ifdef DIFFTOTE
+#if    DIFFTOTE < 0 // DIFFTOTE<0 : only accept TotE match events
+      if( !(fabs(Etot-SourceE[is])<fabs(DIFFTOTE)) ) continue;
+#else   // DIFFTOTE>0 : if TotE match, put all hits in one clust
+      if( fabs(Etot-SourceE[is])<fabs(DIFFTOTE) ) tracker.SetOneClust(true);
+#endif
+#endif
+
+#ifdef ONECLUST
+      tracker.SetOneClust(true);
+#endif
+
+      tracker.OFTtracking();
+      //tracker.Simpletracking();
+      double tmpchi2 = tracker.CalcChi2();
+      if(tmpchi2>0 && tmpchi2<minchi2){
+	bestis = is;
+	minchi2 = tmpchi2;
+	atrack = tracker.GetTrack();
+      }
+    }
+    if(atrack.size()<2){ delete tHits; break;} // cannot find good track
+
+    fEvent->SetBestis(iclust, bestis);
+    for(int i=0; i<atrack.size(); i++){
+      int hid = hitid[atrack[i]];
+      sign[hid] = iclust;
+      //fEvent->SignClust( iclust, hid);
+      Nunsigned--;
+    }
+    iclust++;
+    delete tHits;
   }
-  for(int i=0; i<fHits->size(); i++) uflag[i] = 0;
-  if(atrack.size()>1) for(int i=0; i<atrack.size(); i++) uflag[atrack[i]] = 1;
 #endif
   
   bool kFindPS = false;
@@ -813,14 +879,14 @@ int TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain, 
   for(int i=0; i<fPS.size(); i++){ //loop fPS
 
     if(opt==0){
-      if(uflag[i]!=1) continue;
+      if(sign[i]<0) continue;
       int tmp = agata->AddPStoDiv(&fPS[i], fHits->at(i)); // add to divided pulse shape collection
       if(tmp>maxnhitsdiv) maxnhitsdiv = tmp;
       if(tmp>0) cDivPS++;
     }
 
     if(opt==1){
-      if(uflag[i]!=1) continue;
+      if(sign[i]<0) continue;
       int tmp = agata->CheckPSinPSC(&fPS[i], fHits->at(i)); // check if PS within 3 sigma of PSC
       if(tmp>0) cRemovePS++;
     }
@@ -849,7 +915,7 @@ PS TreeReaderPulse::GetAPS(int iChain, bool skipPS, int &segidx){
     return aps;// require only 1 seg fired in a det
   }
   if(segidx<0 && veng.size()==1){
-    if( !(fabs(veng[0]-obj[iChain].CoreE[0])<3) ){
+    if( !(fabs(veng[0]-obj[iChain].CoreE[0])<5) ){
       segidx = veng.size(); // multi-segment hit below threshold
       return aps;// require only 1 seg fired in a det
     }
@@ -870,14 +936,16 @@ PS TreeReaderPulse::GetAPS(int iChain, bool skipPS, int &segidx){
   for(int iseg=0; iseg<NSeg; iseg++){
     for(int isig=0; isig<NSig; isig++){
       double tmpamp = obj[iChain].SegTraces[iseg*NSig+isig];
-      aps.opulse[iseg][isig] = tmpamp/veng[0];
+      aps.opulse[iseg][isig] = tmpamp/obj[iChain].CoreE[0];
+      //aps.opulse[iseg][isig] = tmpamp/veng[0];
     }
   }
 
   // read core
   for(int isig=0; isig<NSig; isig++){
     double tmpamp = obj[iChain].CoreTraces[isig];
-    aps.opulse[NSegCore-1][isig] = tmpamp/veng[0];
+    aps.opulse[NSegCore-1][isig] = tmpamp/obj[iChain].CoreE[0];
+    //aps.opulse[NSegCore-1][isig] = tmpamp/veng[0];
   }
 
 

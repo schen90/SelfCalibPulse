@@ -23,6 +23,7 @@ public:
   double GetFOM1(){return FOM1;}
   double GetFOM2(){return FOM2;}
   
+  void SetOneClust(bool val){ kOneClust = val;}
   void SetSourcePos(float *posval){ sPos.SetXYZ(posval[0],posval[1],posval[2]);}
   void SetAlfaRed(double val){ alfared = val;}
   void OFTtracking();
@@ -37,6 +38,8 @@ public:
   double CalcChi2();
   
 private:
+  bool kOneClust;  // put all hits in one cluster
+
   vector<Hit*>* fHits; // Hits from one event
   int nhits;
 

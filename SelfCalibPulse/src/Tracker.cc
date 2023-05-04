@@ -13,6 +13,8 @@ Tracker::Tracker(vector<Hit*>* hits, float E){
 
 Tracker::Tracker(vector<Hit*>* hits, float E, TVector3 sourcepos){
 
+  kOneClust = false;
+
   fHits = hits;
   nhits = fHits->size();
 
@@ -40,7 +42,7 @@ Tracker::Tracker(vector<Hit*>* hits, float E, TVector3 sourcepos){
   alfamin = 0.15;
   nopair = 0;
   minprobtrack = 0.05;
-  sigma_thet = 0.8;
+  sigma_thet = 3.2; //!!!!!! default 0.8 for 2mm sigma resolution; 3.2 looks good
 }
 
 Tracker::~Tracker(){
@@ -353,56 +355,58 @@ void Tracker::OFTtracking(){
   vector<double> et;
   vector<vector<int>> sn(MaxNDets);
   int flagu[MaxNDets];
+  int n;
 
-#ifdef ONECLUST // put all hits in one cluster
-  et.push_back(0);
-  sn[0].clear();
-  for(int i=0; i<nhits; i++){
-    sn[0].push_back(i);
-    et[0] += e[i];
-  }
-  int n = et.size();
-
-#else // make cluster by angle
-  double power = pow((nhits+2)/3., 0.9);
-  double alfamax = acos(1-2./power)/alfared;
-
-  int n = et.size(); // counter of cluster
-  for(double alfa=alfamin; alfa<alfamax; alfa+=deltaalfa){
-    for(int i=0; i<nhits; i++) flagu[i]=0;
-
+  if(kOneClust){ // put all hits in one cluster
+    et.push_back(0);
+    sn[0].clear();
     for(int i=0; i<nhits; i++){
-      if(flagu[i]!=0) continue;
-
-      sn[n].clear();
-      sn[n].push_back(i);
-      et.push_back(e[i]); // total energy of cluster
-      flagu[i]=1;
-
-      for(int j=0; j<nhits; j++){
-	if(j==i || flagu[j]!=0) continue;
-
-	if(thetatest[i][j]<=alfa){
-	  sn[n].push_back(j);
-	  et[n] += e[j];
-	  flagu[j]=1;
-	}
-
-	if(sn[n].size() == kmax) break;
-      }
-
-      // accept new cluster only if unique
-      for(int nn=0; nn<n; nn++){
-	if(sn[nn].size()==sn[n].size() && fabs(et[nn]-et[n])<1e-6){
-	  et.pop_back();
-	  break;
-	}
-      }
-
-      n=et.size();
+      sn[0].push_back(i);
+      et[0] += e[i];
     }
-  }// end of loop alfa
-#endif // end of ONECLUST
+    n = et.size();
+
+  }else{ // make clusters by angle
+    double power = pow((nhits+2)/3., 0.9);
+    double alfamax = acos(1-2./power)/alfared;
+
+    n = et.size(); // counter of cluster
+    for(double alfa=alfamin; alfa<alfamax; alfa+=deltaalfa){
+      for(int i=0; i<nhits; i++) flagu[i]=0;
+
+      for(int i=0; i<nhits; i++){
+	if(flagu[i]!=0) continue;
+
+	sn[n].clear();
+	sn[n].push_back(i);
+	et.push_back(e[i]); // total energy of cluster
+	flagu[i]=1;
+
+	for(int j=0; j<nhits; j++){
+	  if(j==i || flagu[j]!=0) continue;
+
+	  if(thetatest[i][j]<=alfa){
+	    sn[n].push_back(j);
+	    et[n] += e[j];
+	    flagu[j]=1;
+	  }
+
+	  if(sn[n].size() == kmax) break;
+	}
+
+	// accept new cluster only if unique
+	for(int nn=0; nn<n; nn++){
+	  if(sn[nn].size()==sn[n].size() && fabs(et[nn]-et[n])<1e-6){
+	    et.pop_back();
+	    break;
+	  }
+	}
+
+	n=et.size();
+      }
+    }// end of loop alfa
+
+  } // end of make clusters
   
   //******** compute figure of merit of clusters ********
   int flagpair[MaxNDets];
@@ -498,9 +502,14 @@ void Tracker::OFTtracking(){
   // save the most likely track
   if(interaction.size()<1) return;
   
-  for(int i=0; i<interaction[0].size(); i++) track.push_back(interaction[0][i]);
+  // find the most likely multi-hit track
+  int itrack = 0;
+  //for(itrack=0; itrack<interaction.size(); itrack++){ if(interaction[itrack].size()>1) break;}
+  //if(itrack==interaction.size()) itrack = 0;
 
-  FOM1 = probtot[0];
+  for(int i=0; i<interaction[itrack].size(); i++) track.push_back(interaction[itrack][i]);
+
+  FOM1 = probtot[itrack];
 
   return;
 }
@@ -630,57 +639,60 @@ void Tracker::Simpletracking(){
   vector<double> et;
   vector<vector<int>> sn(MaxNDets);
   int flagu[MaxNDets];
+  int n;
 
-#ifdef ONECLUST // put all hits in one cluster
-  et.push_back(0);
-  sn[0].clear();
-  for(int i=0; i<nhits; i++){
-    sn[0].push_back(i);
-    et[0] += e[i];
-  }
-  int n = et.size();
-
-#else // make cluster by angle
-  double power = pow((nhits+2)/3., 0.9);
-  double alfamax = acos(1-2./power)/alfared;
-
-  int n = et.size(); // counter of cluster
-  for(double alfa=alfamin; alfa<alfamax; alfa+=deltaalfa){
-    for(int i=0; i<nhits; i++) flagu[i]=0;
-
+  if(kOneClust){ // put all hits in one cluster
+    et.push_back(0);
+    sn[0].clear();
     for(int i=0; i<nhits; i++){
-      if(flagu[i]!=0) continue;
-
-      sn[n].clear();
-      sn[n].push_back(i);
-      et.push_back(e[i]); // total energy of cluster
-      flagu[i]=1;
-
-      for(int j=0; j<nhits; j++){
-	if(j==i || flagu[j]!=0) continue;
-
-	if(thetatest[i][j]<=alfa){
-	  sn[n].push_back(j);
-	  et[n] += e[j];
-	  flagu[j]=1;
-	}
-
-	if(sn[n].size() == kmax) break;
-      }
-
-      // accept new cluster only if unique
-      for(int nn=0; nn<n; nn++){
-	if(sn[nn].size()==sn[n].size() && fabs(et[nn]-et[n])<1e-6){
-	  et.pop_back();
-	  break;
-	}
-      }
-
-      n=et.size();
+      sn[0].push_back(i);
+      et[0] += e[i];
     }
-  }// end of loop alfa
-#endif // end of ONECLUST
+    n = et.size();
+
+  }else{ // make clusters by angle
+    double power = pow((nhits+2)/3., 0.9);
+    double alfamax = acos(1-2./power)/alfared;
+
+    n = et.size(); // counter of cluster
+    for(double alfa=alfamin; alfa<alfamax; alfa+=deltaalfa){
+      for(int i=0; i<nhits; i++) flagu[i]=0;
+
+      for(int i=0; i<nhits; i++){
+	if(flagu[i]!=0) continue;
+
+	sn[n].clear();
+	sn[n].push_back(i);
+	et.push_back(e[i]); // total energy of cluster
+	flagu[i]=1;
+
+	for(int j=0; j<nhits; j++){
+	  if(j==i || flagu[j]!=0) continue;
+
+	  if(thetatest[i][j]<=alfa){
+	    sn[n].push_back(j);
+	    et[n] += e[j];
+	    flagu[j]=1;
+	  }
+
+	  if(sn[n].size() == kmax) break;
+	}
+
+	// accept new cluster only if unique
+	for(int nn=0; nn<n; nn++){
+	  if(sn[nn].size()==sn[n].size() && fabs(et[nn]-et[n])<1e-6){
+	    et.pop_back();
+	    break;
+	  }
+	}
+
+	n=et.size();
+      }
+    }// end of loop alfa
+
+  } // end of make clusters
   
+
   //******** compute min chi2 of clusters ********
   vector<vector<int>> interaction(MaxNDets);
   vector<double> chi2tot;
@@ -751,10 +763,15 @@ void Tracker::Simpletracking(){
   // save the most likely track
   if(interaction.size()<1) return;
   
-  for(int i=0; i<interaction[0].size(); i++) track.push_back(interaction[0][i]);
+  // find the most likely multi-hit track
+  int itrack = 0;
+  //for(itrack=0; itrack<interaction.size(); itrack++){ if(interaction[itrack].size()>1) break;}
+  //if(itrack==interaction.size()) itrack = 0;
 
-  FOM1 = chi2tot[0];
-  FOM2 = chi2tot2[0];
+  for(int i=0; i<interaction[itrack].size(); i++) track.push_back(interaction[itrack][i]);
+
+  FOM1 = chi2tot[itrack];
+  FOM2 = chi2tot2[itrack];
   
   return;
 }
