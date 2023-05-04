@@ -1,0 +1,9 @@
+/Agata/file/enableLM
+/Agata/file/reduceOutput
+/Agata/file/fileSize 2048
+/Agata/file/workingPath ./trunk/
+/control/execute ./trunk/macros/geom180-LNL.mac
+/Agata/generator/emitter/eventFile Source/22Na/22NaEventsxxxx
+/Agata/tracking/method 1
+#/Agata/run/beamOn 5000000
+/Agata/run/beamOn ssss
