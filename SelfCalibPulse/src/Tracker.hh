@@ -23,7 +23,8 @@ public:
   bool CheckOrder();
   double GetFOM1(){return FOM1;}
   double GetFOM2(){return FOM2;}
-  
+
+  void SetOneClust(bool val){ kOneClust = val;}  
   void SetSourcePos(float *posval){ sPos.SetXYZ(posval[0],posval[1],posval[2]);}
   void SetAlfaRed(double val){ alfared = val;}
   void OFTtracking();
@@ -35,15 +36,17 @@ public:
 		   double etotale, vector<int> &order, double bestchi2[]);
 
 
-  double CalcChi2();
+  double CalcChi2(); // Chi2 of the most likely cluster
   
 private:
-  vector<Hit*>* fHits; // Hits from one event
+  bool kOneClust;  // put all hits in one cluster
+
+  vector<Hit*>* fHits; // Hits from one event or a subset
   int nhits;
 
   double EGamma; // MeV gamma energy for calibration, -1 means unknown energy
 
-  vector<int> track; // the most likely order of Hits
+  vector<int> track; // the most likely order of Hits in one cluster
 
   // OFT tracking only output FOM1
   // simple tracking ouput FOM1 and FOM2

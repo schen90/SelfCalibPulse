@@ -39,6 +39,7 @@ AGATA::AGATA(int detid){
   maxndiv   = 0;
 
   for(int idet=0; idet<MaxNDets; idet++){
+    SkipDet[idet] = false;
     for(int iseg=0; iseg<NSeg; iseg++){
       fPSC[idet][iseg] = new vector<PSC*>();
       fHCs[idet][iseg] = new vector<HitCollection*>();
@@ -53,11 +54,11 @@ AGATA::AGATA(int detid){
   fitlimit = 5;
   // PSC number limit
   for(int idet=0; idet<MaxNDets; idet++){
+    if(SkipDet[idet]) continue;
 
     if(Detid<0) PSClimit[idet] = 2500;
     else        PSClimit[idet] = 5000;
     if(idet==0) PSClimit[idet] = 5000;
-    
   }
 }
 
@@ -71,6 +72,7 @@ AGATA::~AGATA(){
 
 void AGATA::WritePSCfiles(){
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     LoadPSCfiles(idet);
     WritePSCfiles(idet);
     cout<<endl;
@@ -83,6 +85,7 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
     idlist.push_back(idet);
   }
@@ -185,6 +188,7 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 
   vector <int> idlist; // detid list to load
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
     idlist.push_back(idet);
   }
@@ -257,12 +261,14 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 
 
 void AGATA::ClearPSCMem(){
-  for(int idet = 0; idet<NDets; idet++)
+  for(int idet = 0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     for(int iseg=0; iseg<NSeg; iseg++){
       cPSCmem-=fPSC[idet][iseg]->size();
       fPSC[idet][iseg]->clear();
       fPSC[idet][iseg]->shrink_to_fit();
     }
+  }
   cPSCtotal = 0;
   cPSCmem   = 0;
   cPSCfile  = 0;
@@ -297,6 +303,7 @@ void AGATA::WriteHCfiles(int detid){
 
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
     idlist.push_back(idet);
   }
@@ -365,6 +372,7 @@ void AGATA::LoadHCfiles(int detid){
 
   vector <int> idlist; // detid list to load
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
     idlist.push_back(idet);
   }
@@ -423,7 +431,8 @@ void AGATA::LoadHCfiles(int detid){
 
 
 void AGATA::ClearHCMem(){
-  for(int idet = 0; idet<NDets; idet++)
+  for(int idet = 0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     for(int iseg=0; iseg<NSeg; iseg++){
       fHCs[idet][iseg]->clear();
       HCMap[idet][iseg].clear();
@@ -431,6 +440,7 @@ void AGATA::ClearHCMem(){
       HCstat[idet][iseg][0] = 0;
       HCstat[idet][iseg][1] = -1;
     }
+  }
 
   for(HitCollection* ahc : *fAllHCs) delete ahc;
   fAllHCs->clear();
@@ -451,6 +461,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
     idlist.push_back(idet);
   }
@@ -489,6 +500,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
   vector<float>  sourcey;
   vector<float>  sourcez;
   vector<float>  sourceeng;
+  int            iclust;
   int            bestis;
 #ifdef DIFFTOTE
   float          Etot;
@@ -531,6 +543,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
 	htree[idet]->Branch("sourcey",&sourcey);
 	htree[idet]->Branch("sourcez",&sourcez);
 	htree[idet]->Branch("sourceeng",&sourceeng);
+	htree[idet]->Branch("iclust",&iclust);
 	htree[idet]->Branch("bestis",&bestis);
 #ifdef DIFFTOTE
 	htree[idet]->Branch("Etot",&Etot);
@@ -552,14 +565,18 @@ void AGATA::WriteEvtHitsfiles(int detid){
       float tmpeng = fEvent->GetSourceE(is);
       sourceeng.push_back(tmpeng);
     }
-    bestis = fEvent->GetBestis();
+    bestis = -1;
+
 #ifdef DIFFTOTE
     Etot = fEvent->Etot;
 #endif
     
     // get fHit information
     vector<Hit*>* fHits = fEvent->GetfHits();
-    for(Hit *ah : *fHits){
+    //for(Hit *ah : *fHits){
+    for(int i=0; i<fHits->size(); i++){
+      Hit *ah = fHits->at(i);
+
       det = ah->GetDet();
       seg = ah->GetSeg();
       interid = ah->GetInterid();
@@ -567,6 +584,9 @@ void AGATA::WriteEvtHitsfiles(int detid){
       bool kfill = false;
       for(int idet : idlist) if(idet==det) kfill = true;
       if(!kfill) continue;
+
+      iclust = fEvent->GetClust(i);
+      if(iclust>-1) bestis = fEvent->GetBestis(iclust);
       
       vhcid.clear(); vhcid.shrink_to_fit();
       vector<HitCollection*>* hcs = ah->GetHitCollections();
@@ -585,6 +605,7 @@ void AGATA::WriteEvtHitsfiles(int detid){
       noiseidx = ah->GetNoiseIdx();
       noiseidxshift = ah->GetNoiseIdxShift();
 #endif
+
       htree[det]->Fill();
     }
   }
@@ -679,6 +700,7 @@ void AGATA::CombEvtHitsfiles(){
     vector<float> *isourcey = 0;
     vector<float> *isourcez = 0;
     vector<float> *isourceeng = 0;
+    int            iiclust;
     int            ibestis;
 #ifdef DIFFTOTE
     float          iEtot;
@@ -711,6 +733,7 @@ void AGATA::CombEvtHitsfiles(){
       
       kempty = true;
       for(int detid=0; detid<NDets; detid++){
+	if(SkipDet[detid]) continue;
 	hfilename = (string) Form("%s_det%04d.root",hfilename0.c_str(),detid);
 	if(gSystem->AccessPathName(hfilename.c_str())){
 	  idx[detid] = -1;
@@ -728,6 +751,7 @@ void AGATA::CombEvtHitsfiles(){
 
       int MaxEntry = -1;
       for(int detid=0; detid<NDets; detid++){
+	if(SkipDet[detid]) continue;
 
 	if(idx[detid]<0){ 
 	  cerr<<"iconfig "<<iconfig<<" irun "<<irun<<" detid "<<detid<<" not exist!!!!"<<endl; 
@@ -756,6 +780,7 @@ void AGATA::CombEvtHitsfiles(){
 	htree[detid]->SetBranchAddress("sourcey",       &obj[detid].isourcey);
 	htree[detid]->SetBranchAddress("sourcez",       &obj[detid].isourcez);
 	htree[detid]->SetBranchAddress("sourceeng",     &obj[detid].isourceeng);
+	htree[detid]->SetBranchAddress("iclust",        &obj[detid].iiclust);
 	htree[detid]->SetBranchAddress("bestis",        &obj[detid].ibestis);
 #ifdef DIFFTOTE
 	htree[detid]->SetBranchAddress("Etot",          &obj[detid].iEtot);
@@ -784,6 +809,7 @@ void AGATA::CombEvtHitsfiles(){
       vector<float>  osourcey;
       vector<float>  osourcez;
       vector<float>  osourceeng;
+      int            oiclust;
       int            obestis;
 #ifdef DIFFTOTE
       float          oEtot;
@@ -808,6 +834,7 @@ void AGATA::CombEvtHitsfiles(){
       htreeall->Branch("sourcey",&osourcey);
       htreeall->Branch("sourcez",&osourcez);
       htreeall->Branch("sourceeng",&osourceeng);
+      htreeall->Branch("iclust",&oiclust);
       htreeall->Branch("bestis",&obestis);
 #ifdef DIFFTOTE
       htreeall->Branch("Etot",&oEtot);
@@ -817,6 +844,7 @@ void AGATA::CombEvtHitsfiles(){
 
 	// find hits belong to the same entry
 	for(int detid=0; detid<NDets; detid++){
+	  if(SkipDet[detid]) continue;
 
 	  if(idx[detid]<0) continue;
 
@@ -842,6 +870,7 @@ void AGATA::CombEvtHitsfiles(){
 	      for(float y : *obj[detid].isourcey) osourcey.push_back(y);
 	      for(float z : *obj[detid].isourcez) osourcez.push_back(z);
 	      for(float eng : *obj[detid].isourceeng) osourceeng.push_back(eng);
+	      oiclust = obj[detid].iiclust;
 	      obestis = obj[detid].ibestis;
 #ifdef DIFFTOTE
 	      oEtot = obj[detid].iEtot;
@@ -867,6 +896,7 @@ void AGATA::CombEvtHitsfiles(){
       } // end of loop entries
 
       for(int detid=0; detid<NDets; detid++){
+	if(SkipDet[detid]) continue;
 	if(idx[detid]<0) continue;
 	hfile[detid]->Close();
       }
@@ -910,6 +940,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<float> *isourcey = 0;
     vector<float> *isourcez = 0;
     vector<float> *isourceeng = 0;
+    int            iiclust;
     int            ibestis;
 #ifdef DIFFTOTE
     float          iEtot;
@@ -983,6 +1014,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     htree->SetBranchAddress("sourcey",       &obj.isourcey);
     htree->SetBranchAddress("sourcez",       &obj.isourcez);
     htree->SetBranchAddress("sourceeng",     &obj.isourceeng);
+    htree->SetBranchAddress("iclust",        &obj.iiclust);
     htree->SetBranchAddress("bestis",        &obj.ibestis);
 #ifdef DIFFTOTE
     htree->SetBranchAddress("Etot",          &obj.iEtot);
@@ -1005,12 +1037,14 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
     vector<int>            vnoiseidx;
     vector<int>            vnoiseidxshift;
 #endif
+    vector<int>            iclust;
+    vector<int>            bestis;
+
     int                    nsource;
     vector<float>          sourcex;
     vector<float>          sourcey;
     vector<float>          sourcez;
     vector<float>          sourceeng;
-    int                    bestis;
 #ifdef DIFFTOTE
     float                  Etot;
 #endif
@@ -1029,6 +1063,9 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       vnoiseidx.clear();
       vnoiseidxshift.clear();
 #endif
+      iclust.clear();
+      bestis.clear();
+
       nsource = 0;
       sourcex.clear();
       sourcey.clear();
@@ -1061,13 +1098,16 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	  vnoiseidx.push_back(obj.inoiseidx);
 	  vnoiseidxshift.push_back(obj.inoiseidxshift);
 #endif
+
+	  iclust.push_back(obj.iiclust);
+	  bestis.push_back(obj.ibestis);
+
 	  if(nsource==0){
 	    nsource = obj.insource;
 	    for(float x : *obj.isourcex) sourcex.push_back(x);
 	    for(float y : *obj.isourcey) sourcey.push_back(y);
 	    for(float z : *obj.isourcez) sourcez.push_back(z);
 	    for(float eng : *obj.isourceeng) sourceeng.push_back(eng);
-	    bestis = obj.ibestis;
 #ifdef DIFFTOTE
 	    Etot = obj.iEtot;
 #endif
@@ -1076,6 +1116,7 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 
       }
 
+      if(vdet.size()<2) continue;
 
       // make EventHits
       vector<float> SourceE;
@@ -1086,7 +1127,6 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
       }
       EventHits* fEvent = new EventHits(SourceE, SourcePos);
       fEvent->SetIdx(iconfig,irun,iety);
-      fEvent->SetBestis(bestis);
 #ifdef DIFFTOTE
       fEvent->Etot = Etot;
 #endif
@@ -1108,6 +1148,9 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
 	ahit->SetNoiseIdxShift(vnoiseidxshift[i]);
 #endif
 	fEvent->Add(ahit);
+	fEvent->SignClust(iclust[i],i);
+	if(iclust[i]>-1) fEvent->SetBestis(iclust[i],bestis[i]);
+
 	cHits++;
 
 	
@@ -1216,6 +1259,7 @@ void AGATA::ClearEvtHitsMem(){
 
 void AGATA::SortPSC(){
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     for(int iseg=0; iseg<NSeg; iseg++){
       // increasing ientry
       sort(fPSC[idet][iseg]->begin(),fPSC[idet][iseg]->end(),
@@ -1537,6 +1581,7 @@ float AGATA::FindMaxDev(PS *aps, Hit *ahit){
 
 void AGATA::FindDevCut(){
   for(int idet=0; idet<MaxNDets; idet++){
+    if(SkipDet[idet]) continue;
     for(int iseg=0; iseg<NSeg; iseg++){
 
       for(PSC *apsc : *fPSC[idet][iseg]){
@@ -1609,6 +1654,7 @@ void AGATA::FindDevSigma(PS *aps, Hit *ahit){
 
 void AGATA::CalcDevSigma(){
   for(int idet=0; idet<MaxNDets; idet++){
+    if(SkipDet[idet]) continue;
     for(int iseg=0; iseg<NSeg; iseg++){
 
       for(PSC *apsc : *fPSC[idet][iseg]){
@@ -1801,13 +1847,16 @@ int AGATA::CheckPSinPSC(PS *aps, Hit *ahit){
 
 void AGATA::MakeCPulse(){
 #ifdef NTHREADS
-  for(int detid=0; detid<MaxNDets; detid++)
+  for(int detid=0; detid<MaxNDets; detid++){
+    if(SkipDet[detid]) continue;
     for(int segid=0; segid<NSeg; segid++)
       PSCmtx[detid][segid].lock(); // lock PSC for one segment
+  }
 #endif
 
   cout<<"\e[1;31m Make cpulse for all PSCs ... \e[0m"<<endl;
   for(int detid=0; detid<MaxNDets; detid++){
+    if(SkipDet[detid]) continue;
     for(int segid=0; segid<NSeg; segid++){
       for(PSC* apsc : *fPSC[detid][segid]){
 
@@ -1821,9 +1870,11 @@ void AGATA::MakeCPulse(){
   }
 
 #ifdef NTHREADS
-  for(int detid=0; detid<MaxNDets; detid++)
+  for(int detid=0; detid<MaxNDets; detid++){
+    if(SkipDet[detid]) continue;
     for(int segid=0; segid<NSeg; segid++)
       PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
+  }
 #endif
   
   return;
@@ -1832,9 +1883,11 @@ void AGATA::MakeCPulse(){
 
 void AGATA::RemoveMotherPSC(){
 #ifdef NTHREADS
-  for(int detid=0; detid<MaxNDets; detid++)
+  for(int detid=0; detid<MaxNDets; detid++){
+    if(SkipDet[detid]) continue;
     for(int segid=0; segid<NSeg; segid++)
       PSCmtx[detid][segid].lock(); // lock PSC for one segment
+  }
 #endif
 
   cout<<"\e[1;31m Remove Mother PSC ... \e[0m"<<endl;
@@ -1853,9 +1906,11 @@ void AGATA::RemoveMotherPSC(){
   cout<<"\r Remove "<<counter<<" mother PSC"<<endl;
 
 #ifdef NTHREADS
-  for(int detid=0; detid<MaxNDets; detid++)
+  for(int detid=0; detid<MaxNDets; detid++){
+    if(SkipDet[detid]) continue;
     for(int segid=0; segid<NSeg; segid++)
       PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
+  }
 #endif
 
   return;
@@ -1863,9 +1918,11 @@ void AGATA::RemoveMotherPSC(){
 
 void AGATA::RemoveSmallPSC(int minhits){
 #ifdef NTHREADS
-  for(int detid=0; detid<MaxNDets; detid++)
+  for(int detid=0; detid<MaxNDets; detid++){
+    if(SkipDet[detid]) continue;
     for(int segid=0; segid<NSeg; segid++)
       PSCmtx[detid][segid].lock(); // lock PSC for one segment
+  }
 #endif
 
   cout<<"\e[1;31m Remove Small (<"<<minhits<<") PSC  ... \e[0m"<<endl;
@@ -1885,9 +1942,11 @@ void AGATA::RemoveSmallPSC(int minhits){
   cout<<"\r Remove "<<counter<<" small PSC"<<endl;
 
 #ifdef NTHREADS
-  for(int detid=0; detid<MaxNDets; detid++)
+  for(int detid=0; detid<MaxNDets; detid++){
+    if(SkipDet[detid]) continue;
     for(int segid=0; segid<NSeg; segid++)
       PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
+  }
 #endif
 
   return;
@@ -2320,6 +2379,7 @@ void AGATA::TrackingLoop(){
   for(; ievt<Nevts;){ // loop events
 
     // get Hits for ievt
+    EventHits *fEvent;
     vector<Hit*>* fHits;
     vector<TVector3> sourcepos; // mm
     vector<float> EGamma; // keV
@@ -2353,15 +2413,16 @@ void AGATA::TrackingLoop(){
       }
 
       if(ievt>=Nevts) continue;
-      fHits = fEventHits->at(ievt)->GetfHits();
+      fEvent = fEventHits->at(ievt);
+      fHits = fEvent->GetfHits();
 #ifdef DIFFTOTE
-      Etot = fEventHits->at(ievt)->Etot;
+      Etot = fEvent->Etot;
 #endif
       sourcepos.clear();  EGamma.clear();
-      int nsource = fEventHits->at(ievt)->GetNSource();
+      int nsource = fEvent->GetNSource();
       for(int is=0; is<nsource; is++){
-	sourcepos.push_back(fEventHits->at(ievt)->GetSourcePos(is));
-	EGamma.push_back(fEventHits->at(ievt)->GetSourceE(is));
+	sourcepos.push_back(fEvent->GetSourcePos(is));
+	EGamma.push_back(fEvent->GetSourceE(is));
       }
       ievt++;
     }
@@ -2370,48 +2431,87 @@ void AGATA::TrackingLoop(){
     for(Hit* ahit : *fHits) ahit->CalcAveHCsPosition(0);
 
     // tracking
-    int nsource = EGamma.size();
-    vector<int> atrack;
-    int bestis = 0;
-    double minchi2 = 1e9;
-    for(int is=0; is<nsource; is++){
-#ifdef DIFFTOTE
-      if( !(fabs(Etot-EGamma[is])<DIFFTOTE) ) continue;
-#endif
-      Tracker tracker(fHits, EGamma[is], sourcepos[is]);
-      tracker.OFTtracking();
-      //tracker.Simpletracking();
-      double tmpchi2 = tracker.CalcChi2();
-      if(tmpchi2>0 && tmpchi2<minchi2){
-	bestis = is;
-	minchi2 = tmpchi2;
-	atrack = tracker.GetTrack();
-      }
-    }
-    
-#ifdef TRACKINGTREE
-    if(atrack.size()>1){
-      Tracker tracker(fHits, EGamma[bestis], sourcepos[bestis]);
-      tracker.OFTtracking();
-      //tracker.Simpletracking();
+    vector<int> sign(fHits->size(),-1);
+    int Nunsigned = sign.size();
+    int iclust = 0;
 
-      lock_guard<mutex> lock(Trtreemtx);
-      Trnhits = atrack.size();
-      TrSource = true;
-      TrSourceE = EGamma[bestis];
-      TrSourcePos[0] = sourcepos[bestis].X();  TrSourcePos[1] = sourcepos[bestis].Y();  TrSourcePos[2] = sourcepos[bestis].Z();
-      TrCorrect = tracker.CheckOrder();
-      TrFOM1 = tracker.GetFOM1();
-      TrFOM2 = tracker.GetFOM2();
-      Trtree->Fill();
-    }
+    // analysis clusters
+    while(Nunsigned>1){
+      vector<Hit*>* tHits = new vector<Hit*>();
+      vector<int> hitid;
+      // add unused hits
+      for(int i=0; i<sign.size(); i++){
+	if(sign[i]<0){
+	  tHits->push_back( fHits->at(i) );
+	  hitid.push_back(i);
+	}
+      }
+      if(tHits->size()<2){ delete tHits;  break;}
+
+      int nsource = EGamma.size();
+      vector<int> atrack;
+      int bestis = 0;
+      double minchi2 = 1e9;
+      for(int is=0; is<nsource; is++){
+	Tracker tracker(tHits, EGamma[is], sourcepos[is]);
+
+#ifdef DIFFTOTE
+#if    DIFFTOTE < 0 // DIFFTOTE<0 : only accept TotE match events
+	if( !(fabs(Etot-EGamma[is])<fabs(DIFFTOTE)) ) continue;
+#else   // DIFFTOTE>0 : if TotE match, put all hits in one clust
+	if( fabs(Etot-EGamma[is])<fabs(DIFFTOTE) ) tracker.SetOneClust(true);
+#endif
+#endif
+
+#ifdef ONECLUST
+	tracker.SetOneClust(true);
+#endif
+
+	tracker.OFTtracking();
+	//tracker.Simpletracking();
+	double tmpchi2 = tracker.CalcChi2();
+	if(tmpchi2>0 && tmpchi2<minchi2){
+	  bestis = is;
+	  minchi2 = tmpchi2;
+	  atrack = tracker.GetTrack();
+	}
+      }
+      if(atrack.size()<2){ delete tHits; break;} // cannot find good track    
+
+      fEvent->SetBestis(iclust, bestis);
+      for(int i=0; i<atrack.size(); i++){
+	int hid = hitid[atrack[i]];
+	sign[hid] = iclust;
+	fEvent->SignClust( iclust, hid);
+	Nunsigned--;
+      }
+
+
+#ifdef TRACKINGTREE
+      if(atrack.size()>1){
+	Tracker tracker(tHits, EGamma[bestis], sourcepos[bestis]);
+#ifdef ONECLUST
+	tracker.SetOneClust(true);
+#endif
+	tracker.OFTtracking();
+	//tracker.Simpletracking();
+
+	lock_guard<mutex> lock(Trtreemtx);
+	Trnhits = atrack.size();
+	TrSource = true;
+	TrSourceE = EGamma[bestis];
+	TrSourcePos[0] = sourcepos[bestis].X();  TrSourcePos[1] = sourcepos[bestis].Y();  TrSourcePos[2] = sourcepos[bestis].Z();
+	TrCorrect = tracker.CheckOrder();
+	TrFOM1 = tracker.GetFOM1();
+	TrFOM2 = tracker.GetFOM2();
+	Trtree->Fill();
+      }
 #endif
     
-    // make paths
-    if(atrack.size()>1){ // at least two hits
+      // make paths
       int ngoodhit = 0;
       double incE = EGamma[bestis];
-      double depE = fHits->at(atrack[0])->GetE(); // keV
+      double depE = tHits->at(atrack[0])->GetE(); // keV
 
       Hit *sourcehit = new Hit(sourcepos[bestis]);
       sourcehit->SetInterid(-1);
@@ -2419,44 +2519,48 @@ void AGATA::TrackingLoop(){
       lock_guard<mutex> lock(Pathsmtx);
 #endif
       ngoodhit = 1; // sourcehit is always good hit
-      //if(fHits->at(atrack[0])->hasHitCollection()>0) ngoodhit++;
-      //if(fHits->at(atrack[1])->hasHitCollection()>0) ngoodhit++;
-      if(fHits->at(atrack[0])->hasgoodHCs(0)>0) ngoodhit++;
-      if(fHits->at(atrack[1])->hasgoodHCs(0)>0) ngoodhit++;
+      //if(tHits->at(atrack[0])->hasHitCollection()>0) ngoodhit++;
+      //if(tHits->at(atrack[1])->hasHitCollection()>0) ngoodhit++;
+      if(tHits->at(atrack[0])->hasgoodHCs(0)>0) ngoodhit++;
+      if(tHits->at(atrack[1])->hasgoodHCs(0)>0) ngoodhit++;
       cPathsN[ngoodhit]++;
 
       //if(ngoodhit>1){ // at least two good hit
       if(ngoodhit==3){ // three good hit
-	Path *apath = new Path(sourcehit,fHits->at(atrack[0]),fHits->at(atrack[1]),
+	Path *apath = new Path(sourcehit,tHits->at(atrack[0]),tHits->at(atrack[1]),
 			       incE, depE, incE, depE);
 	fPaths->push_back(apath);
 	cPaths++;
       }
       incE = incE - depE;
+
       for(int i=1; i<atrack.size()-1; i++){ //<--- was atrack.size()-2 ????
-	depE = fHits->at(atrack[i])->GetE(); // keV
+	depE = tHits->at(atrack[i])->GetE(); // keV
 
 	ngoodhit = 0;
-	//if(fHits->at(atrack[i-1])->hasHitCollection()>0) ngoodhit++;
-	//if(fHits->at(atrack[i]  )->hasHitCollection()>0) ngoodhit++;
-	//if(fHits->at(atrack[i+1])->hasHitCollection()>0) ngoodhit++;
-	if(fHits->at(atrack[i-1])->hasgoodHCs(0)>0) ngoodhit++;
-	if(fHits->at(atrack[i]  )->hasgoodHCs(0)>0) ngoodhit++;
-	if(fHits->at(atrack[i+1])->hasgoodHCs(0)>0) ngoodhit++;
+	//if(tHits->at(atrack[i-1])->hasHitCollection()>0) ngoodhit++;
+	//if(tHits->at(atrack[i]  )->hasHitCollection()>0) ngoodhit++;
+	//if(tHits->at(atrack[i+1])->hasHitCollection()>0) ngoodhit++;
+	if(tHits->at(atrack[i-1])->hasgoodHCs(0)>0) ngoodhit++;
+	if(tHits->at(atrack[i]  )->hasgoodHCs(0)>0) ngoodhit++;
+	if(tHits->at(atrack[i+1])->hasgoodHCs(0)>0) ngoodhit++;
 	cPathsN[ngoodhit]++;
 	
 	//if(ngoodhit>1){ // at least two good hit
 	if(ngoodhit==3){ // three good hit
-	  Path *apath = new Path(fHits->at(atrack[i-1]),fHits->at(atrack[i]),fHits->at(atrack[i+1]),
+	  Path *apath = new Path(tHits->at(atrack[i-1]),tHits->at(atrack[i]),tHits->at(atrack[i+1]),
 				 incE, depE, incE, depE);
 	  fPaths->push_back(apath);
 	  cPaths++;
 	}
 	incE = incE - depE;
       }
-    }
-    
-  }
+
+      iclust++;
+      delete tHits;
+    }// end of loop clusters in one event 
+
+  }// end of loop events
 
   return;
 }
@@ -2948,6 +3052,7 @@ void AGATA::InitTreeRead(TTree *tree){
 
 void AGATA::ClosePSCFiles(){
   for(int idet=0; idet<NDets; idet++){
+    if(SkipDet[idet]) continue;
     if(!pscfile[idet]) continue;
     if(pscfile[idet]->IsOpen()) pscfile[idet]->Close();
   }

@@ -41,11 +41,6 @@ public:
   virtual void MakeNoise();
   virtual void LoadNoise();
   
-  virtual void ScanPS(AGATA *agata, long long nevts);
-  virtual void ScanPS(AGATA *agata, long long nevts, double Diff);
-  virtual void ScanPSLoop1(int iChain, AGATA *agata, long long nevts);
-  virtual void ScanPSLoop2(int itype, TTree *postree, TTree *anatree, AGATA *agata, long long nevts, double Diff);
-  
   virtual void Init(int iChain);
 
   virtual void GenerateHCs(int opt, AGATA *agata);
@@ -68,11 +63,15 @@ public:
   void SetMaxMemUsage(double value){ MaxMemUsage = value;}
 
   int GetRemovePSNumber(){ return cRemovePS;}
+
+  void SkipDetId(int val){ SkipDet[val]=true;}
   
 private:
   TChain* fChain[NChain]; //!pointer to the analyzed tree
 
   int Detid = -1;
+  bool SkipDet[MaxNDets];
+
   long long NEventHits; // size of fEventHits in AGATA.hh
 #ifdef NOISE
   float noise[NOISE]; // base for noise

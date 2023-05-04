@@ -21,7 +21,6 @@ public:
 
   Int_t GetNDets(){ return NDets;}
   void LoadGrid(Int_t itype, string gridfile = "pulsedb/LibTrap_A001.root");
-  void LoadGridChi2sMap(string gridmapfile = "Map/MapGrid.dat", float scale = 1);
   
   void LoadMatrix(string LookUpTable = "LookUp/CrystalPositionLookUpTable");
   TMatrixD Lab2DetPos(Int_t idet, TMatrixD LabPos);

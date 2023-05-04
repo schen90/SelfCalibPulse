@@ -15,22 +15,22 @@ using namespace std;
 
 #define GB 1073741824. // size of 1GB 1024*1024*1024
 #define MaxMemoryUsage 100.
-#define NTHREADS 20
-#define NTHREADS2 50
-#define ONECLUST // make one cluster in tracking
+#define NTHREADS 10
+#define NTHREADS2 80
+//#define ONECLUST // make one cluster in tracking
 #define TRACKINGTREE // ouput tracking results
 //#define PSA // PSA to assign initial pos
 #define RADIUS0 2 // mm, initial PSC size from PSA
 #define MINUIT2
-#define DIFFTOTE 10 // total energy match source, maxdiff 10keV
+#define DIFFTOTE 10 // total energy match source, maxdiff 10keV; negative value means only accept such events
 //#define MULTISEG // include multi-segment events
 //#define CHECKTRACK // check track using OFT tacking
 //#define SINGLEHIT
 #define ADDPS // input G4Tree noPS, addPS from db
-#define NOISE 1000000
-#define PSCEMIN 0. // keV, PSC greate with PS Energy > PSCEMIN
+//#define NOISE 1000000
+#define PSCEMIN 200. // keV, PSC greate with PS CoreEnergy > PSCEMIN
 #define MINHITS 10    // min nhits for a good HC
-#define MAXHITS 5000  // max nhit for a HC
+#define MAXHITS 1000  // max nhit for a HC
 #define SHORT
 
 // agata

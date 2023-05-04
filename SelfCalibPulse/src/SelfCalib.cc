@@ -27,7 +27,6 @@ void help(){
       <<setw(30)<<left<<" -comb"<<" : combine Hit files for every run"<<endl
       <<setw(30)<<left<<" -Fit"<<" : Fit HCs pos"<<endl
       <<setw(30)<<left<<" -loop Ntrack Nfit"<<" : set iterate Ntrack Nfit"<<endl
-      <<setw(30)<<left<<" -scanPS Nevts Diff"<<" : scan Pulse Shape for one detector to compare Chi2"<<endl
       <<endl;
   return;
 }
@@ -50,7 +49,6 @@ int main(int argc, char* argv[]){
   bool kPSA        = false;
   bool kComb       = false;
   bool kFit        = false;
-  bool kScanPS     = false;
   
   string configfile;
   int Detid = -1;
@@ -86,10 +84,6 @@ int main(int argc, char* argv[]){
     }else if(TString(argv[i]) == "-loop"){
       NFullLoop = atoi(argv[++i]);
       NFitLoop = atoi(argv[++i]);
-    }else if(TString(argv[i]) == "-scanPS"){
-      kScanPS = true;
-      MaxEvts = atoi(argv[++i]);
-      Diff = atof(argv[++i]);
     }
 
   }
@@ -124,11 +118,27 @@ int main(int argc, char* argv[]){
   if(kFit) cout<<"NthrdsFit - "<<NTHREADS2<<"; ";
 #endif
 
-  if(kScanPS){
-    cout<<"ScanPS ";
-  }
-  
   cout<<"\e[0m"<<endl;
+
+  // skip some detectors
+  vector<int> skipdetid;
+  skipdetid.push_back(9);   skipdetid.push_back(10);   skipdetid.push_back(11); // 03A 03B 03C not mounted
+  skipdetid.push_back(15);                                                      // 05A not connected
+  skipdetid.push_back(36);  skipdetid.push_back(37);   skipdetid.push_back(38); // 12A 12B 12C not mounted
+  skipdetid.push_back(42);  skipdetid.push_back(43);   skipdetid.push_back(44); // 14A 14B 14C not connected
+  if(skipdetid.size()>0){
+    cout<<"\e[1;31m Skip Det: ";
+    for(int idet : skipdetid){
+      int cluster = idet/3;
+      string detname = Form("%02d",cluster);
+      int itype   = idet%3;
+      if(itype==0) detname += "A ";
+      if(itype==1) detname += "B ";
+      if(itype==2) detname += "C ";
+      cout<<detname;
+    }
+    cout<<"\e[0m"<<endl;
+  }
 
   
   // clock
@@ -159,10 +169,11 @@ int main(int argc, char* argv[]){
   
   // init TreeReader
   TreeReaderPulse* treereader;
-  if(kMakeInit || kGroupPulse || kScanPS){
+  if(kMakeInit || kGroupPulse){
     treereader = new TreeReaderPulse(Detid);
     treereader->Load(configfile);
     treereader->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
+    for(int idet : skipdetid) treereader->SkipDetId(idet);
   }
 
   // clear folders
@@ -174,6 +185,7 @@ int main(int argc, char* argv[]){
 
   // init AGATA
   AGATA *agata = new AGATA(Detid);  
+  for(int idet : skipdetid) agata->SkipDetId(idet);
   agata->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
   agata->SetPSA(kPSA);
 
@@ -182,19 +194,6 @@ int main(int argc, char* argv[]){
 #else
   cout<<Form("Without noise")<<endl;
 #endif
-  
-
-  //*****************************************//
-  // Scan PS to determine chi2slimit
-  //*****************************************//
-  if(kScanPS){
-    treereader->ScanPS(agata, MaxEvts, Diff);
-    delete treereader;
-    delete agata;
-    time(&stop);
-    printf("\n============ Elapsed time: %.1f seconds =============\n",difftime(stop,start));
-    return 0;
-  }
   
 
   //*****************************************//
