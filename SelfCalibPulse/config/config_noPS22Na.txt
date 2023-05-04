@@ -1,0 +1,7 @@
+#input 0
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path G4Sim/rootfiles3/noPS_22Na
+run 0 3899
+nevt -1
