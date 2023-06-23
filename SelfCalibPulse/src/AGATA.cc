@@ -38,9 +38,9 @@ AGATA::AGATA(int detid){
   cHCs      = 0;
   maxndiv   = 0;
 
+  ClearSkipDetId();
   for(int idet=0; idet<MaxNDets; idet++){
-    SkipDet[idet] = false;
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
       fPSC[idet][iseg] = new vector<PSC*>();
       fHCs[idet][iseg] = new vector<HitCollection*>();
     }
@@ -52,14 +52,6 @@ AGATA::AGATA(int detid){
 
   // parameters for HC pos optimize
   fitlimit = 5;
-  // PSC number limit
-  for(int idet=0; idet<MaxNDets; idet++){
-    if(SkipDet[idet]) continue;
-
-    if(Detid<0) PSClimit[idet] = 2500;
-    else        PSClimit[idet] = 5000;
-    if(idet==0) PSClimit[idet] = 5000;
-  }
 }
 
 AGATA::~AGATA(){
@@ -72,10 +64,8 @@ AGATA::~AGATA(){
 
 void AGATA::WritePSCfiles(){
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
     LoadPSCfiles(idet);
     WritePSCfiles(idet);
-    cout<<endl;
   }
 }
 
@@ -85,10 +75,17 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
-    idlist.push_back(idet);
+
+    int nsize = 0;
+    for(int iseg=0; iseg<NSEGS; iseg++)  nsize += fHCs[idet][iseg]->size();
+
+    if(nsize>0){
+      idlist.push_back(idet);
+    }
   }
+  if(idlist.size()==0) return;
+
   string pscfilesname0 = "./PSCfiles/tmp/Det";
   string pscfilesname = "./PSCfiles/Det";
   //if(Detid>-1) pscfilesname = "./share/PSCs/Det";
@@ -102,7 +99,7 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 
     pscfile[idet] = new TFile(Form("%s%04d.root",pscfilesname0.c_str(),idet),"RECREATE");
 
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
       cout<<"\r writing tree for Det "<<idet<<" Seg "<<iseg<<" ..."<<flush;
       psctree[idet][iseg] = new TTree(Form("tree%d",iseg),Form("pulse shape tree for det%04d seg%d",idet,iseg));
 
@@ -153,10 +150,10 @@ void AGATA::WritePSCfiles(int detid){ // create Pulse Shape Collection files
 	for(int ix=0; ix<3; ix++) dist2 += SQ(calpos2[ix]-labpos[ix]);
 	dist2 = sqrt(dist2);
 
-	for(int iiseg=0; iiseg<NSegCore; iiseg++){
-	  copy_n(fPSC[idet][iseg]->at(ic)->spulse[iiseg], NSig, spulse[iiseg]);
+	for(int iiseg=0; iiseg<NCHAN; iiseg++){
+	  copy_n(fPSC[idet][iseg]->at(ic)->spulse[iiseg], BSIZE, spulse[iiseg]);
 	}
-	copy_n(fPSC[idet][iseg]->at(ic)->devsigma, NSeg_comp, devsigma);
+	copy_n(fPSC[idet][iseg]->at(ic)->devsigma, NCOMP, devsigma);
 
 	npaths = fHCs[idet][iseg]->at(ic)->GetPaths()->size();
 	
@@ -186,14 +183,16 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
   ClearPSCMem();
   //ClosePSCFiles();
 
+  string pscfilesname = "PSCfiles/Det";
   vector <int> idlist; // detid list to load
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
+    string pscfilename0 = (string) Form("%s%04d.root",pscfilesname.c_str(),idet);
+    if(gSystem->AccessPathName(pscfilename0.c_str())) continue;
     idlist.push_back(idet);
   }
-  string pscfilesname = "PSCfiles/Det";
-  //if(Detid>-1) pscfilesname = "./share/PSCs/Det";
+  if(idlist.size()==0) return;
+
   cout<<"\e[1;33m Load Pulse Shape Collections from "<<pscfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
@@ -202,7 +201,7 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
   for(int idet : idlist){
     pscfile[idet] = new TFile(Form("%s%04d.root",pscfilesname.c_str(),idet));
 
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
       psctree[idet][iseg] = (TTree*)pscfile[idet]->Get(Form("tree%d",iseg));
 
       InitTreeRead(psctree[idet][iseg]);
@@ -235,10 +234,10 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 	copy_n(labpos, 3, apsc->labpos);
 	copy_n(detpos, 3, apsc->detpos);
 
-	for(int iiseg=0; iiseg<NSegCore; iiseg++){
-	  copy_n(spulse[iiseg], NSig, apsc->spulse[iiseg]);
+	for(int iiseg=0; iiseg<NCHAN; iiseg++){
+	  copy_n(spulse[iiseg], BSIZE, apsc->spulse[iiseg]);
 	}
-	copy_n(devsigma, NSeg_comp, apsc->devsigma);
+	copy_n(devsigma, NCOMP, apsc->devsigma);
 	
 	fPSC[idet][iseg]->push_back(apsc);
 	cPSCtotal++;   cPSCmem++;
@@ -262,8 +261,7 @@ void AGATA::LoadPSCfiles(int detid){ // load all Pulse Shape Collection in memor
 
 void AGATA::ClearPSCMem(){
   for(int idet = 0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
       cPSCmem-=fPSC[idet][iseg]->size();
       fPSC[idet][iseg]->clear();
       fPSC[idet][iseg]->shrink_to_fit();
@@ -303,10 +301,17 @@ void AGATA::WriteHCfiles(int detid){
 
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
-    idlist.push_back(idet);
+
+    int nsize = 0;
+    for(int iseg=0; iseg<NSEGS; iseg++)  nsize += fHCs[idet][iseg]->size();
+
+    if(nsize>0){
+      idlist.push_back(idet);
+    }
   }
+  if(idlist.size()==0) return;
+
   string hcfilesname = "./share/HCs/Det";
   cout<<"\e[1;33m Create "<<hcfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
@@ -319,8 +324,8 @@ void AGATA::WriteHCfiles(int detid){
     hcfilesname = (string) Form("./share/HCs/Det%04d.root",idet);
 
     TFile *hcfile = new TFile(hcfilesname.c_str(),"RECREATE");
-    TTree *hctree[NSeg];
-    for(iseg=0; iseg<NSeg; iseg++){
+    TTree *hctree[NSEGS];
+    for(iseg=0; iseg<NSEGS; iseg++){
       cout<<"\r writing hctree for Det "<<idet<<" Seg "<<iseg<<" ..."<<flush;
 
       hctree[iseg] = new TTree(Form("tree%d",iseg),Form("tree for Hit Collections det%04d seg%d",idet,iseg));
@@ -353,6 +358,23 @@ void AGATA::WriteHCfiles(int detid){
       }
       hctree[iseg]->Write();
     }
+
+    // save hPSCstat
+    int ndiv = hPSCstat.size();
+    if(ndiv>0){
+      int maxnhits = hPSCstat[0]->GetNbinsX();
+      TH2D *hPSCstat2 = new TH2D("PSCstat","PSCstat vs idiv",ndiv,-0.5,ndiv-0.5,maxnhits,-0.5,maxnhits-0.5);
+      for(int idiv=0; idiv<ndiv; idiv++){
+	double x = idiv;
+	int nbins = hPSCstat[idiv]->GetNbinsX();
+	for(int ibin=0; ibin<nbins; ibin++){
+	  double y = hPSCstat[idiv]->GetXaxis()->GetBinCenter(ibin+1);
+	  double w = hPSCstat[idiv]->GetBinContent(ibin+1);
+	  hPSCstat2->Fill(x,y,w);
+	}
+      }
+      hPSCstat2->Write();
+    }
     hcfile->Close();
   }
   cout<<"\r writing hctree for Det "<<idet<<" Seg "<<iseg<<" ..."<<endl;
@@ -370,20 +392,23 @@ void AGATA::LoadHCfiles(int detid){
 
   ClearHCMem();
 
+  string hcfilesname = "./share/HCs/Det";
   vector <int> idlist; // detid list to load
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
+    string hcfilename0 = (string) Form("%s%04d.root",hcfilesname.c_str(),idet);
+    if(gSystem->AccessPathName(hcfilename0.c_str())) continue;
     idlist.push_back(idet);
   }
-  string hcfilesname = "./share/HCs/Det";
+  if(idlist.size()==0) return;
+
   cout<<"\e[1;33m Load HitCollections from "<<hcfilesname;
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
 
   TChain *hctree = new TChain();
   for(int idet : idlist)
-    for(int iseg=0; iseg<NSeg; iseg++)
+    for(int iseg=0; iseg<NSEGS; iseg++)
       hctree->AddFile(Form("./share/HCs/Det%04d.root",idet),0,Form("tree%d",iseg));
 
   hctree->SetBranchAddress("det",&det);
@@ -415,9 +440,14 @@ void AGATA::LoadHCfiles(int detid){
   cout<<"\r load "<<ihc<<" / "<<Nhcs<<" HitCollections..."<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."<<endl;
 
   for(int idet : idlist){
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
       HCstat[idet][iseg][0] = fHCs[idet][iseg]->size();
-      HCstat[idet][iseg][1] = fHCs[idet][iseg]->back()->GetPid();
+
+      if(fHCs[idet][iseg]->size()>0){
+	HCstat[idet][iseg][1] = fHCs[idet][iseg]->back()->GetPid();
+      }else{
+	HCstat[idet][iseg][1] = 0;
+      }
 
       cout<<"\r fHCs["<<idet<<"]["<<iseg<<"]->"
 	  <<"at("<<HCstat[idet][iseg][0]-1<<")->Pid = "<<HCstat[idet][iseg][1]<<flush;
@@ -432,8 +462,7 @@ void AGATA::LoadHCfiles(int detid){
 
 void AGATA::ClearHCMem(){
   for(int idet = 0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
       fHCs[idet][iseg]->clear();
       HCMap[idet][iseg].clear();
       fHCs[idet][iseg]->shrink_to_fit();
@@ -461,10 +490,17 @@ void AGATA::WriteEvtHitsfiles(int detid){
 
   vector <int> idlist; // detid list to write
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
     if(detid>-1 && idet!=detid) continue;
-    idlist.push_back(idet);
+
+    int nsize = 0;
+    for(int iseg=0; iseg<NSEGS; iseg++)  nsize += fHCs[idet][iseg]->size();
+
+    if(nsize>0){
+      idlist.push_back(idet);
+    }
   }
+  if(idlist.size()==0) return;
+
   cout<<"\e[1;33m Create hit files for Det";
   cout<<idlist[0];  if(idlist.size()>1) cout<<" ~ "<<idlist.back();
   cout<<" ... \e[0m"<<endl;
@@ -639,17 +675,29 @@ void AGATA::Load(string configfile){
   while(!fin.eof()){
     fin.getline(buffer,500);
     if(strncmp(buffer,"#input",6)==0){
+      Config aconfig;
       int nsource = 0;
+      vector<int>      tmpskip;
+      int tmpdetid;
       fin >> buffer >> nsource;
       for(int i=0; i<nsource; i++){
 	fin >> buffer >> sE >> spos[0] >> spos[1] >> spos[2];
       }
       fin >> buffer >> pathtmp;
       fin >> buffer >> run[0] >> run[1];
+      // skip det
+      fin >> buffer >> tmpdetid;
+      while(tmpdetid>-1){
+        tmpskip.push_back(tmpdetid);
+        fin >> tmpdetid;
+      }
       fin >> buffer >> nevt;
 
-      MinRun.push_back(run[0]);
-      MaxRun.push_back(run[1]);
+      aconfig.MinRun = run[0];
+      aconfig.MaxRun = run[1];
+      aconfig.skipdetid  = tmpskip;
+
+      fConfigs.push_back(aconfig);
       nConfig++;
     }
   }
@@ -663,7 +711,7 @@ void AGATA::Load(string configfile){
   
   cout<<"\e[1;33m find "<<nConfig<<" inputs:\e[0m"<<endl;
   for(int i=0; i<nConfig; i++){
-    cout<<"#input "<<i<<": "<<Form("run %d ~ %d",MinRun[i],MaxRun[i])<<endl;
+    cout<<"#input "<<i<<": "<<Form("run %d ~ %d",fConfigs[i].MinRun,fConfigs[i].MaxRun)<<endl;
   }
 
 }
@@ -719,7 +767,10 @@ void AGATA::CombEvtHitsfiles(){
     hfilename0 = (string) Form("./share/Hits/input%d",iconfig);
     if(gSystem->AccessPathName(hfilename0.c_str())) return;
 
-    for(irun=MinRun[iconfig]; irun<MaxRun[iconfig]+1; irun++){ // loop runs 
+    ClearSkipDetId();
+    for(int idet : fConfigs[iconfig].skipdetid) SkipDetId(idet);
+
+    for(irun=fConfigs[iconfig].MinRun; irun<fConfigs[iconfig].MaxRun+1; irun++){ // loop runs 
 
       // check exist
       hfilename0 = (string) Form("./share/Hits/input%d/run%04d",iconfig,irun);
@@ -912,7 +963,7 @@ void AGATA::CombEvtHitsfiles(){
 }
 
 
-void AGATA::LoadEvtHitsfiles2(int iconfig){
+void AGATA::LoadEvtHitsfiles(int iconfig){
 
   //------------------------------------------------
   // Hit
@@ -957,13 +1008,13 @@ void AGATA::LoadEvtHitsfiles2(int iconfig){
   if(gSystem->AccessPathName(hfilename0.c_str())) return;
 
   int irun;  
-  for(; atomrun<MaxRun[iconfig]+1;){ // loop runs 
+  for(; atomrun<fConfigs[iconfig].MaxRun+1;){ // loop runs 
 
     {
 #ifdef NTHREADS2
       lock_guard<mutex> lock(EvtHitsmtx);
 #endif
-      if(atomrun<MaxRun[iconfig]+1){
+      if(atomrun<fConfigs[iconfig].MaxRun+1){
 	irun = atomrun;
 	atomrun++;
       }else{
@@ -1213,15 +1264,15 @@ void AGATA::LoadEvtHitsconfigs(){
     string hfilename0 = (string) Form("./share/Hits/input%d",iconfig);
     if(gSystem->AccessPathName(hfilename0.c_str())) continue;
 
-    atomrun = MinRun[iconfig];
+    atomrun = fConfigs[iconfig].MinRun;
     
 #ifndef NTHREADS2
-    LoadEvtHitsfiles2(iconfig);
+    LoadEvtHitsfiles(iconfig);
 #else
     thread th[NTHREADS2];
   
     for(int i=0; i<NTHREADS2; i++){
-      th[i] = thread(&AGATA::LoadEvtHitsfiles2, this, iconfig);
+      th[i] = thread(&AGATA::LoadEvtHitsfiles, this, iconfig);
     }
 
     for(int i=0; i<NTHREADS2; i++){
@@ -1259,8 +1310,8 @@ void AGATA::ClearEvtHitsMem(){
 
 void AGATA::SortPSC(){
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
+      if(fPSC[idet][iseg]->size()==0) continue;
       // increasing ientry
       sort(fPSC[idet][iseg]->begin(),fPSC[idet][iseg]->end(),
 	   [](const PSC* lhs, const PSC* rhs){
@@ -1307,14 +1358,17 @@ int AGATA::InitPSCandHC(int detid, int segid){
     PSC *newpsc = new PSC(detid, segid);
     newpsc->index = ipsc;
     newpsc->nhits = 0;
+    newpsc->divdir[0] = -1;
+    newpsc->divdir[1] = -1;
+    newpsc->divdir[2] = -1;
     newpsc->dividx = vector<int>(0);
     for(int ix=0; ix<3; ix++){
       newpsc->labpos[ix] = 0;
       newpsc->detpos[ix] = 0;
     }
-    int fseg[NSeg_comp];
+    int fseg[NCOMP];
     agatageo->GetNextSegs(segid, fseg);
-    for(int iseg=0; iseg<NSeg_comp; iseg++){
+    for(int iseg=0; iseg<NCOMP; iseg++){
       newpsc->divzone[iseg] = -1;
       newpsc->segcmp[iseg] = fseg[iseg];
       newpsc->devabscut[iseg][0] = -1;
@@ -1322,9 +1376,14 @@ int AGATA::InitPSCandHC(int detid, int segid){
       newpsc->devabs[iseg] = vector<float>(0);
       newpsc->dev[iseg] = vector<float>(0);
     }
-    for(int iseg=0; iseg<NSegCore; iseg++){
-      for(int isig=0; isig<NSig; isig++){
+    for(int iseg=0; iseg<NCHAN; iseg++){
+      for(int isig=0; isig<BSIZE; isig++){
 	newpsc->spulse[iseg][isig] = 0;
+      }
+    }
+    for(int iseg=0; iseg<NCOMP; iseg++){
+      for(int isig=0; isig<BSIZE; isig++){
+	newpsc->cpulse[iseg][isig] = 0;
       }
     }
 
@@ -1357,24 +1416,24 @@ int AGATA::InitPSCandHC(int detid, int segid){
 
 
 void AGATA::FindInitZone(PS *aps, vector<int> *initzone){
-  int segid = aps->seg;
-  int fseg[NSeg_comp];
-  agatageo->GetNextSegs(segid, fseg);
+  //int segid = aps->seg;
+  //int fseg[NCOMP];
+  //agatageo->GetNextSegs(segid, fseg);
 
-  float apulse[NSig_comp], bpulse[NSig_comp];
+  float apulse[LOOP_SAMP], bpulse[LOOP_SAMP];
   float asum, bsum;
-  float apulseabs[NSig_comp], bpulseabs[NSig_comp];
+  float apulseabs[LOOP_SAMP], bpulseabs[LOOP_SAMP];
   float asumabs, bsumabs;
   float ratio;
 
   vector<int> zone[3];
 
   // 0:iseg and 1:core
-  copy_n( aps->opulse[fseg[0]], NSig_comp, apulse);
-  copy_n( aps->opulse[fseg[1]], NSig_comp, bpulse);
+  copy_n( aps->cpulse[0], LOOP_SAMP, apulse);
+  copy_n( aps->cpulse[1], LOOP_SAMP, bpulse);
 
-  asum = std::accumulate( apulse, apulse+NSig_comp, 0.);
-  bsum = std::accumulate( bpulse, bpulse+NSig_comp, 0.);
+  asum = std::accumulate( apulse, apulse+LOOP_SAMP, 0.);
+  bsum = std::accumulate( bpulse, bpulse+LOOP_SAMP, 0.);
 
   ratio = asum/bsum;
   if( ratio<0.8 ) zone[0].push_back(0); // inner
@@ -1382,19 +1441,19 @@ void AGATA::FindInitZone(PS *aps, vector<int> *initzone){
   if( fabs(ratio-1)<=0.2 ) zone[0].push_back(2); // center
 
   // neighbor sector 2 & 3
-  copy_n( aps->opulse[fseg[2]], NSig_comp, apulse);
-  copy_n( aps->opulse[fseg[3]], NSig_comp, bpulse);
+  copy_n( aps->cpulse[2], LOOP_SAMP, apulse);
+  copy_n( aps->cpulse[3], LOOP_SAMP, bpulse);
 
-  for(int i=0; i<NSig_comp; i++){
+  for(int i=0; i<LOOP_SAMP; i++){
     apulseabs[i] = fabs(apulse[i]);
     bpulseabs[i] = fabs(bpulse[i]);
   }
 
-  asum = std::accumulate( apulse, apulse+NSig_comp, 0.);
-  bsum = std::accumulate( bpulse, bpulse+NSig_comp, 0.);
+  asum = std::accumulate( apulse, apulse+LOOP_SAMP, 0.);
+  bsum = std::accumulate( bpulse, bpulse+LOOP_SAMP, 0.);
 
-  asumabs = std::accumulate( apulseabs, apulseabs+NSig_comp, 0.);
-  bsumabs = std::accumulate( bpulseabs, bpulseabs+NSig_comp, 0.);
+  asumabs = std::accumulate( apulseabs, apulseabs+LOOP_SAMP, 0.);
+  bsumabs = std::accumulate( bpulseabs, bpulseabs+LOOP_SAMP, 0.);
 
   ratio = asumabs/bsumabs;
   if( ratio<0.8 ) zone[1].push_back(0); // left
@@ -1520,11 +1579,19 @@ int AGATA::AddPStoPSC(PS *aps, Hit *ahit, int ipsc){
   }
 
   // calc average pulse
-  for(int iseg=0; iseg<NSegCore; iseg++){
-    for(int isig=0; isig<NSig; isig++){
+  for(int iseg=0; iseg<NCHAN; iseg++){
+    for(int isig=0; isig<BSIZE; isig++){
       fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig] =
 	1./(nhitstmp+1)*(fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig]*nhitstmp +
 			 aps->opulse[iseg][isig]);
+    }
+  }
+
+  for(int is=0; is<NCOMP; is++){
+    for(int isig=0; isig<BSIZE; isig++){
+      fPSC[detid][segid]->at(ipsc)->cpulse[is][isig] =
+	1./(nhitstmp+1)*(fPSC[detid][segid]->at(ipsc)->cpulse[is][isig]*nhitstmp +
+			 aps->cpulse[is][isig]);
     }
   }
 
@@ -1556,15 +1623,15 @@ float AGATA::FindMaxDev(PS *aps, Hit *ahit){
     int ipsc = ahc->GetPid();
     PSC *apsc = fPSC[detid][segid]->at(ipsc);
 
-    for(int is=0; is<NSeg_comp; is++){
+    for(int is=0; is<NCOMP; is++){
 
       if( DivDir>-1 && ((int)(is/2))!=DivDir) continue;
 
-      int iseg = apsc->segcmp[is];
+      //int iseg = apsc->segcmp[is];
 
-      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
-      copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
+      float asegpulse[LOOP_SAMP], bsegpulse[LOOP_SAMP];
+      copy_n( aps->cpulse[is], LOOP_SAMP, asegpulse);
+      copy_n(apsc->cpulse[is], LOOP_SAMP, bsegpulse);
 
       float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
       Devseg(asegpulse, bsegpulse, dev);
@@ -1581,12 +1648,12 @@ float AGATA::FindMaxDev(PS *aps, Hit *ahit){
 
 void AGATA::FindDevCut(){
   for(int idet=0; idet<MaxNDets; idet++){
-    if(SkipDet[idet]) continue;
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
+      if(fPSC[idet][iseg]->size()==0) continue;
 
       for(PSC *apsc : *fPSC[idet][iseg]){
 
-	for(int is=0; is<NSeg_comp; is++){
+	for(int is=0; is<NCOMP; is++){
 
 	  if( DivDir>-1 && ((int)(is/2))!=DivDir) continue;
 
@@ -1634,12 +1701,12 @@ void AGATA::FindDevSigma(PS *aps, Hit *ahit){
     int ipsc = ahc->GetPid();
     PSC *apsc = fPSC[detid][segid]->at(ipsc);
 
-    for(int is=0; is<NSeg_comp; is++){
-      int iseg = apsc->segcmp[is];
+    for(int is=0; is<NCOMP; is++){
+      //int iseg = apsc->segcmp[is];
 
-      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
-      copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
+      float asegpulse[LOOP_SAMP], bsegpulse[LOOP_SAMP];
+      copy_n( aps->cpulse[is], LOOP_SAMP, asegpulse);
+      copy_n(apsc->cpulse[is], LOOP_SAMP, bsegpulse);
 
       float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
       Devseg(asegpulse, bsegpulse, dev);
@@ -1654,12 +1721,12 @@ void AGATA::FindDevSigma(PS *aps, Hit *ahit){
 
 void AGATA::CalcDevSigma(){
   for(int idet=0; idet<MaxNDets; idet++){
-    if(SkipDet[idet]) continue;
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
+      if(fPSC[idet][iseg]->size()==0) continue;
 
       for(PSC *apsc : *fPSC[idet][iseg]){
 
-	for(int is=0; is<NSeg_comp; is++){
+	for(int is=0; is<NCOMP; is++){
 	  int nsize = apsc->dev[is].size();
 	  if(nsize<1) continue;
 
@@ -1684,19 +1751,19 @@ void AGATA::CalcDevSigma(){
 }
 
 
-void AGATA::FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone){
+void AGATA::FindDivZone(PS *aps, PSC *apsc, int divdir, vector<vector<int>> *divzone){
 
-  for(int is=0; is<NSeg_comp; is++){
+  for(int is=0; is<NCOMP; is++){
 
     vector<int> tmp;
 
-    if( DivDir<0 || ((int)(is/2))==DivDir){
+    if( divdir<0 || ((int)(is/2))==divdir){
 
       // divide
-      int iseg = apsc->segcmp[is];
-      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
-      copy_n(apsc->spulse[iseg], NSig_comp, bsegpulse);
+      //int iseg = apsc->segcmp[is];
+      float asegpulse[LOOP_SAMP], bsegpulse[LOOP_SAMP];
+      copy_n( aps->cpulse[is], LOOP_SAMP, asegpulse);
+      copy_n(apsc->cpulse[is], LOOP_SAMP, bsegpulse);
 
       float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
       Devseg(asegpulse, bsegpulse, dev);
@@ -1719,7 +1786,7 @@ void AGATA::FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone){
       }
 
     }else{ // not divide
-      tmp.push_back(0);
+      tmp.push_back(-1);
     }
     
     divzone->push_back(tmp);
@@ -1744,63 +1811,84 @@ int AGATA::AddPStoDiv(PS *aps, Hit *ahit){
     HitCollection* ahc = hcs->at(iHC);
     int ipsc = ahc->GetPid();
     PSC *apsc = fPSC[detid][segid]->at(ipsc);
+    if(apsc->divdir[2]>-1) apsc->divdir[0]=apsc->divdir[1]=apsc->divdir[2]=-1;
 
     if(apsc->nhits > MAXHITS){ // if the PSC is large size, then divide it
-      vector<vector<int>> *divzone = new vector<vector<int>>();
-      FindDivZone(aps, apsc, divzone); // find all divided zone the PS belong to
-      int tmpidx[NSeg_comp];
-      int ndiv = 1;
-      for(int is=0; is<NSeg_comp; is++){
-	ndiv *= divzone->at(is).size();
-	tmpidx[is] = 0;
+      vector<int> divdir;
+      if(DivDir!=-3) divdir.push_back(DivDir);
+      else{
+	for(int idir=0; idir<3; idir++){
+	  if(idir!=apsc->divdir[0] && idir!=apsc->divdir[1] && idir!=apsc->divdir[2])
+	    divdir.push_back(idir);
+	}
       }
 
-      int tmpzone[NSeg_comp];
-      for(int idiv=0; idiv<ndiv; idiv++){ // loop all divided zone the PS belong to
-	for(int is=0; is<NSeg_comp; is++) tmpzone[is] = divzone->at(is)[tmpidx[is]];
+      for(int idir=0; idir<divdir.size(); idir++){ // loop divdir
+	vector<vector<int>> *divzone = new vector<vector<int>>();
+	FindDivZone(aps, apsc, divdir[idir], divzone); // find all divided zone the PS belong to
+	int tmpidx[NCOMP];
+	int ndiv = 1;
+	for(int is=0; is<NCOMP; is++){
+	  ndiv *= divzone->at(is).size();
+	  tmpidx[is] = 0;
+	}
 
-	int ndaughter = apsc->dividx.size();
-	int idaughter;
-	int jpsc;
-	for(idaughter=0; idaughter<ndaughter; idaughter++){
-	  jpsc = apsc->dividx[idaughter];
-	  bool kfound = true;
-	  for(int is=0; is<NSeg_comp; is++){
-	    if(tmpzone[is] != fPSC[detid][segid]->at(jpsc)->divzone[is]){
-	      kfound = false;
-	      break;
+	int tmpzone[NCOMP];
+	for(int idiv=0; idiv<ndiv; idiv++){ // loop all divided zone the PS belong to
+	  for(int is=0; is<NCOMP; is++) tmpzone[is] = divzone->at(is)[tmpidx[is]];
+
+	  int ndaughter = apsc->dividx.size();
+	  int idaughter;
+	  int jpsc;
+	  for(idaughter=0; idaughter<ndaughter; idaughter++){
+	    jpsc = apsc->dividx[idaughter];
+	    bool kfound = true;
+	    for(int is=0; is<NCOMP; is++){
+	      if(tmpzone[is] != fPSC[detid][segid]->at(jpsc)->divzone[is]){
+		kfound = false;
+		break;
+	      }
+	    }
+
+	    if(kfound) break;
+	  }
+
+	  if(idaughter==ndaughter){ // cannot find the daughter PSC
+	    jpsc = InitPSCandHC(detid, segid); // create new daughter PSC
+	    if(jpsc<0) continue;
+	    for(int is=0; is<NCOMP; is++) fPSC[detid][segid]->at(jpsc)->divzone[is] = tmpzone[is];
+	    for(int ii=0; ii<3; ii++){
+	      if(apsc->divdir[ii]>-1){
+		fPSC[detid][segid]->at(jpsc)->divdir[ii] = apsc->divdir[ii];
+	      }else{
+		fPSC[detid][segid]->at(jpsc)->divdir[ii] = divdir[idir];
+		break;
+	      }
+	    }
+
+	    apsc->dividx.push_back(jpsc);
+	    if(idaughter>maxndiv) maxndiv = idaughter;
+	  }
+
+	  // Add PS to PSC and HC
+	  int tmp = AddPStoPSC(aps, ahit, jpsc);
+	  if(tmp>tmpnhits) tmpnhits=tmp;
+
+	  // next zone
+	  tmpidx[0]++;
+	  for(int is=0; is<NCOMP-1; is++){
+	    if(tmpidx[is]==divzone->at(is).size()){
+	      tmpidx[is] = 0;
+	      tmpidx[is+1]++;
 	    }
 	  }
-
-	  if(kfound) break;
-	}
-
-	if(idaughter==ndaughter){ // cannot find the daughter PSC
-	  jpsc = InitPSCandHC(detid, segid); // create new daughter PSC
-	  if(jpsc<0) continue;
-	  for(int is=0; is<NSeg_comp; is++) fPSC[detid][segid]->at(jpsc)->divzone[is] = tmpzone[is];
-	  apsc->dividx.push_back(jpsc);
-	  if(idaughter>maxndiv) maxndiv = idaughter;
-	}
-
-	// Add PS to PSC and HC
-	int tmp = AddPStoPSC(aps, ahit, jpsc);
-	if(tmp>tmpnhits) tmpnhits=tmp;
-
-	// next zone
-	tmpidx[0]++;
-	for(int is=0; is<NSeg_comp-1; is++){
-	  if(tmpidx[is]==divzone->at(is).size()){
-	    tmpidx[is] = 0;
-	    tmpidx[is+1]++;
+	  if(tmpidx[NCOMP-1]==divzone->at(NCOMP-1).size()){
+	    if(idiv!=ndiv-1) cout<<"something wrong!!!"<<endl;
+	    break;
 	  }
-	}
-	if(tmpidx[NSeg_comp-1]==divzone->at(NSeg_comp-1).size()){
-	  if(idiv!=ndiv-1) cout<<"something wrong!!!"<<endl;
-	  break;
-	}
 
-      } // end of loop divided zone
+	} // end of loop divided zone
+      } // end of loop divdir
     } // end of if the PSC is large size
   } // end of loop HitCollections
   
@@ -1819,12 +1907,12 @@ int AGATA::CheckPSinPSC(PS *aps, Hit *ahit){
     PSC *apsc = fPSC[detid][segid]->at(ipsc);
 
     bool kreject = false;
-    for(int is=0; is<NSeg_comp; is++){
-      int iseg = apsc->segcmp[is];
+    for(int is=0; is<NCOMP; is++){
+      //int iseg = apsc->segcmp[is];
 
-      float asegpulse[NSig_comp], bsegpulse[NSig_comp];
-      copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
-      copy_n(apsc->cpulse[is],   NSig_comp, bsegpulse);
+      float asegpulse[LOOP_SAMP], bsegpulse[LOOP_SAMP];
+      copy_n( aps->cpulse[is],   LOOP_SAMP, asegpulse);
+      copy_n(apsc->cpulse[is],   LOOP_SAMP, bsegpulse);
 
       float dev[4]; // 0: abs dev; 1: dev; 2: dev sum sum; 3: empty
       Devseg(asegpulse, bsegpulse, dev);
@@ -1845,24 +1933,54 @@ int AGATA::CheckPSinPSC(PS *aps, Hit *ahit){
 }
 
 
+void AGATA::ClearDivDir(){
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++){
+    for(int segid=0; segid<NSEGS; segid++)
+      PSCmtx[detid][segid].lock(); // lock PSC for one segment
+  }
+#endif
+
+  cout<<"\e[1;31m Clear DivDir for all PSCs ... \e[0m"<<endl;
+  for(int detid=0; detid<MaxNDets; detid++){
+    for(int segid=0; segid<NSEGS; segid++){
+      if(fPSC[detid][segid]->size()==0) continue;
+
+      for(PSC* apsc : *fPSC[detid][segid]){
+	apsc->divdir[0]=apsc->divdir[1]=apsc->divdir[2]=-1;
+      }
+    }
+  }
+
+#ifdef NTHREADS
+  for(int detid=0; detid<MaxNDets; detid++){
+    for(int segid=0; segid<NSEGS; segid++)
+      PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
+  }
+#endif
+
+  return;
+}
+
+
 void AGATA::MakeCPulse(){
 #ifdef NTHREADS
   for(int detid=0; detid<MaxNDets; detid++){
-    if(SkipDet[detid]) continue;
-    for(int segid=0; segid<NSeg; segid++)
+    for(int segid=0; segid<NSEGS; segid++)
       PSCmtx[detid][segid].lock(); // lock PSC for one segment
   }
 #endif
 
   cout<<"\e[1;31m Make cpulse for all PSCs ... \e[0m"<<endl;
   for(int detid=0; detid<MaxNDets; detid++){
-    if(SkipDet[detid]) continue;
-    for(int segid=0; segid<NSeg; segid++){
+    for(int segid=0; segid<NSEGS; segid++){
+      if(fPSC[detid][segid]->size()==0) continue;
+
       for(PSC* apsc : *fPSC[detid][segid]){
 
-	for(int is=0; is<NSeg_comp; is++){
+	for(int is=0; is<NCOMP; is++){
 	  int iseg = apsc->segcmp[is];
-	  copy_n(apsc->spulse[iseg], NSig, apsc->cpulse[is]);
+	  copy_n(apsc->spulse[iseg], BSIZE, apsc->cpulse[is]);
 	}
 
       }
@@ -1871,8 +1989,7 @@ void AGATA::MakeCPulse(){
 
 #ifdef NTHREADS
   for(int detid=0; detid<MaxNDets; detid++){
-    if(SkipDet[detid]) continue;
-    for(int segid=0; segid<NSeg; segid++)
+    for(int segid=0; segid<NSEGS; segid++)
       PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
   }
 #endif
@@ -1884,8 +2001,7 @@ void AGATA::MakeCPulse(){
 void AGATA::RemoveMotherPSC(){
 #ifdef NTHREADS
   for(int detid=0; detid<MaxNDets; detid++){
-    if(SkipDet[detid]) continue;
-    for(int segid=0; segid<NSeg; segid++)
+    for(int segid=0; segid<NSEGS; segid++)
       PSCmtx[detid][segid].lock(); // lock PSC for one segment
   }
 #endif
@@ -1907,8 +2023,7 @@ void AGATA::RemoveMotherPSC(){
 
 #ifdef NTHREADS
   for(int detid=0; detid<MaxNDets; detid++){
-    if(SkipDet[detid]) continue;
-    for(int segid=0; segid<NSeg; segid++)
+    for(int segid=0; segid<NSEGS; segid++)
       PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
   }
 #endif
@@ -1919,8 +2034,7 @@ void AGATA::RemoveMotherPSC(){
 void AGATA::RemoveSmallPSC(int minhits){
 #ifdef NTHREADS
   for(int detid=0; detid<MaxNDets; detid++){
-    if(SkipDet[detid]) continue;
-    for(int segid=0; segid<NSeg; segid++)
+    for(int segid=0; segid<NSEGS; segid++)
       PSCmtx[detid][segid].lock(); // lock PSC for one segment
   }
 #endif
@@ -1943,8 +2057,7 @@ void AGATA::RemoveSmallPSC(int minhits){
 
 #ifdef NTHREADS
   for(int detid=0; detid<MaxNDets; detid++){
-    if(SkipDet[detid]) continue;
-    for(int segid=0; segid<NSeg; segid++)
+    for(int segid=0; segid<NSEGS; segid++)
       PSCmtx[detid][segid].unlock(); // unlock PSC for one segment
   }
 #endif
@@ -1996,11 +2109,17 @@ void AGATA::RemovePSfromPSC(PS *aps, Hit *ahit, int jpsc){ // remove ahit from P
     }
     
     // calc average pulse
-    for(int iseg=0; iseg<NSegCore; iseg++)
-      for(int isig=0; isig<NSig; isig++)
+    for(int iseg=0; iseg<NCHAN; iseg++)
+      for(int isig=0; isig<BSIZE; isig++)
 	fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig] =
 	  ftmp*(fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig]*nhitstmp -
 		aps->opulse[iseg][isig]);
+      
+    for(int is=0; is<NCOMP; is++)
+      for(int isig=0; isig<BSIZE; isig++)
+	fPSC[detid][segid]->at(ipsc)->cpulse[is][isig] =
+	  ftmp*(fPSC[detid][segid]->at(ipsc)->cpulse[is][isig]*nhitstmp -
+		aps->cpulse[is][isig]);
       
     fPSC[detid][segid]->at(ipsc)->nhits--;
     if(fPSC[detid][segid]->at(ipsc)->nhits==0){ cPSCtotal--; cPSCmem--;}
@@ -2060,18 +2179,26 @@ void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
     fPSC[detid][segid]->at(ipsc)->detpos[ix] = 0;
   }
 
-  for(int is=0; is<NSeg_comp; is++){
+  for(int is=0; is<NCOMP; is++){
     fPSC[detid][segid]->at(ipsc)->divzone[is] = -1;
     fPSC[detid][segid]->at(ipsc)->devabscut[is][0] = -1;
     fPSC[detid][segid]->at(ipsc)->devsigma[is] = -1;
     fPSC[detid][segid]->at(ipsc)->devabs[is].clear();
     fPSC[detid][segid]->at(ipsc)->dev[is].clear();
   }
+  fPSC[detid][segid]->at(ipsc)->divdir[0] = -1;
+  fPSC[detid][segid]->at(ipsc)->divdir[1] = -1;
+  fPSC[detid][segid]->at(ipsc)->divdir[2] = -1;
   fPSC[detid][segid]->at(ipsc)->dividx.clear();
   
-  for(int iseg=0; iseg<NSegCore; iseg++){
-    for(int isig=0; isig<NSig; isig++)
+  for(int iseg=0; iseg<NCHAN; iseg++){
+    for(int isig=0; isig<BSIZE; isig++)
       fPSC[detid][segid]->at(ipsc)->spulse[iseg][isig] = 0;
+  }
+
+  for(int is=0; is<NCOMP; is++){
+    for(int isig=0; isig<BSIZE; isig++)
+      fPSC[detid][segid]->at(ipsc)->cpulse[is][isig] = 0;
   }
 
   freeHCs[detid][segid].push_back(ipsc);
@@ -2083,17 +2210,17 @@ void AGATA::RemovePSC(HitCollection *ahc){ // empty ahc from fHCs
 
 void AGATA::Devseg(const float *apulse, const float *bpulse, float *dev){
 
-  //float apulsediff[NSig_comp], bpulsediff[NSig_comp];
+  //float apulsediff[LOOP_SAMP], bpulsediff[LOOP_SAMP];
   //std::adjacent_difference( std::begin(apulse), std::end(apulse), std::begin(apulsediff));
   //std::adjacent_difference( std::begin(bpulse), std::end(bpulse), std::begin(bpulsediff));
 
-  float apulsesum[NSig_comp], bpulsesum[NSig_comp];
-  std::partial_sum( apulse, apulse+NSig_comp, apulsesum);
-  std::partial_sum( bpulse, bpulse+NSig_comp, bpulsesum);
+  float apulsesum[LOOP_SAMP], bpulsesum[LOOP_SAMP];
+  std::partial_sum( apulse, apulse+LOOP_SAMP, apulsesum);
+  std::partial_sum( bpulse, bpulse+LOOP_SAMP, bpulsesum);
 
   float asum, bsum;
-  asum = std::accumulate( apulsesum, apulsesum+NSig_comp, 0.);
-  bsum = std::accumulate( bpulsesum, bpulsesum+NSig_comp, 0.);
+  asum = std::accumulate( apulsesum, apulsesum+LOOP_SAMP, 0.);
+  bsum = std::accumulate( bpulsesum, bpulsesum+LOOP_SAMP, 0.);
 
   dev[2] = asum - bsum;
 
@@ -2116,7 +2243,7 @@ void AGATA::Devseg(const float *apulse, const float *bpulse, float *dev){
   __m256 diffdevabs = _mm256_setzero_ps();
   */
 
-  for(int nn=0; nn<LOOP_SSE8_seg; nn++){
+  for(int nn=0; nn<LOOP_8SSE; nn++){
     diff = _mm256_sub_ps(realtrace[nn], basetrace[nn]);
     devori = _mm256_add_ps(devori, diff); // original value
     devabs = _mm256_add_ps(devabs, _mm256_andnot_ps(masks, diff)); // ABS value
@@ -2174,7 +2301,7 @@ void AGATA::Devseg(const float *apulse, const float *bpulse, float *dev){
   __m128 diffdevabs = _mm_setzero_ps();
   */
 
-  for(int nn=0; nn<LOOP_SSE4_seg; nn++){
+  for(int nn=0; nn<LOOP_4SSE; nn++){
     diff = _mm_sub_ps(realtrace[nn], basetrace[nn]);
     devori = _mm_add_ps(devori, diff); // original value
     devabs = _mm_add_ps(devabs, _mm_andnot_ps(masks, diff)); // ABS value
@@ -2217,7 +2344,7 @@ Float_t AGATA::Chi2seg(const float *apulse, const float *bpulse){
   __m256 sigm = _mm256_setzero_ps();
   __m256 chis = _mm256_setzero_ps();
 
-  for(int nn=0; nn<LOOP_SSE8_seg; nn++){
+  for(int nn=0; nn<LOOP_8SSE; nn++){
     diff = _mm256_sub_ps(realtrace[nn], basetrace[nn]);
 #if   CHI2 == CHI2_SQ
     chis = _mm256_add_ps(chis, _mm256_mul_ps(diff,diff)); // square
@@ -2266,7 +2393,7 @@ Float_t AGATA::Chi2seg(const float *apulse, const float *bpulse){
   __m128 sigm = _mm_setzero_ps();
   __m128 chis = _mm_setzero_ps();
 
-  for(int nn=0; nn<LOOP_SSE4_seg; nn++){
+  for(int nn=0; nn<LOOP_4SSE; nn++){
     diff = _mm_sub_ps(realtrace[nn], basetrace[nn]);
 #if   CHI2 == CHI2_SQ
     chis = _mm_add_ps(chis, _mm_mul_ps(diff,diff)); // square
@@ -2320,6 +2447,16 @@ void AGATA::CheckPSCstat(long long *PSCstat){
   PSCstat[0] = maxnhits;
   PSCstat[1] = nPSC;
   PSCstat[2] = nEmpty;
+
+
+  // fill hPSCstat
+  int ndiv = hPSCstat.size();
+  TH1D *htmp = new TH1D(Form("PSCstat%d",ndiv),Form("PSCstat%d",ndiv),maxnhits+1,-0.5,maxnhits+0.5);
+  for(HitCollection *ahc : *fAllHCs){
+    int tmpnhits = ahc->GetSize();
+    htmp->Fill(tmpnhits);
+  }
+  hPSCstat.push_back(htmp);
 
   return;
 }
@@ -2679,7 +2816,7 @@ Double_t WrappedEstimator(const double *par){
 
   // check bounds
   bool OutOfBounds = !(ageo->CheckBounds(aHC->GetDet(), aHC->GetSeg(), par));
-  if(OutOfBounds) result = result*1000;
+  if(OutOfBounds) result = result*100000;
   
   return result;
 }
@@ -2904,7 +3041,7 @@ void AGATA::ReadPSAbasis(){
 
     Int_t dbsegi;
     Float_t dbposi[3];
-    Float_t dbspulsei[NSig*NSegCore];
+    Float_t dbspulsei[BSIZE*NCHAN];
 
     dbtree->SetBranchAddress("seg",&dbsegi);
     dbtree->SetBranchAddress("pos",dbposi);
@@ -2922,15 +3059,15 @@ void AGATA::ReadPSAbasis(){
       
       bool skip = true;
       // pulse shape for comparison
-      int fseg[NSeg_comp]; //0,1:fired seg, core; 2,3:next sectors; 4,5:next slice
+      int fseg[NCOMP]; //0,1:fired seg, core; 2,3:next sectors; 4,5:next slice
       agatageo->GetNextSegs(dbsegi, fseg);
 
-      for(int i=0; i<NSeg_comp; i++){
+      for(int i=0; i<NCOMP; i++){
 	int iseg = fseg[i];
-	for(int isig=0; isig<NSig; isig++){
+	for(int isig=0; isig<BSIZE; isig++){
 	  float tmpamp = 0;
-	  if(iseg<NSeg) tmpamp = dbspulsei[iseg*NSig+isig];
-	  else          tmpamp = dbspulsei[NSeg*NSig+isig];
+	  if(iseg<NSEGS) tmpamp = dbspulsei[iseg*BSIZE+isig];
+	  else           tmpamp = dbspulsei[NSEGS*BSIZE+isig];
 
 	  if(tmpamp>0.5) skip=false;
 	  apsabasis.spulse[i][isig] = tmpamp;
@@ -2959,19 +3096,19 @@ TVector3 AGATA::GetPSpos(int detid, int segid, PS *aps){
 #ifdef PSA
   if(kPSA){
 
-    int fseg[NSeg_comp];
+    int fseg[NCOMP];
     agatageo->GetNextSegs(segid, fseg);
     int npoint = fPSAbasis[itype][segid].size();
     float minchi2 = 1e9;
-    float asegpulse[NSig_comp], bsegpulse[NSig_comp];
+    float asegpulse[LOOP_SAMP], bsegpulse[LOOP_SAMP];
     // compare fired seg, core and neighbor segment
     for(int ipoint=0; ipoint<npoint; ipoint++){
 
       float chi2=0;
-      for(int is=0; is<NSeg_comp; is++){
+      for(int is=0; is<NCOMP; is++){
 	int iseg = fseg[is];
-        copy_n( aps->opulse[iseg], NSig_comp, asegpulse);
-        copy_n(fPSAbasis[itype][segid][ipoint].spulse[is], NSig_comp, bsegpulse);
+        copy_n( aps->opulse[iseg], LOOP_SAMP, asegpulse);
+        copy_n(fPSAbasis[itype][segid][ipoint].spulse[is], LOOP_SAMP, bsegpulse);
         float tmpchi2 = Chi2seg(asegpulse, bsegpulse);
         chi2 += tmpchi2; // sum
 	
@@ -3025,8 +3162,8 @@ void AGATA::InitTreeWrite(TTree *tree){
   tree->Branch("dist",&dist);
   tree->Branch("dist2",&dist2);
 
-  tree->Branch("spulse",spulse,Form("spulse[%d][%d]/F",NSegCore,NSig));  
-  tree->Branch("devsigma",devsigma,Form("devsigma[%d]/F",NSeg_comp));  
+  tree->Branch("spulse",spulse,Form("spulse[%d][%d]/F",NCHAN,BSIZE));  
+  tree->Branch("devsigma",devsigma,Form("devsigma[%d]/F",NCOMP));  
 
   tree->Branch("npaths",&npaths);
 }
@@ -3052,7 +3189,6 @@ void AGATA::InitTreeRead(TTree *tree){
 
 void AGATA::ClosePSCFiles(){
   for(int idet=0; idet<NDets; idet++){
-    if(SkipDet[idet]) continue;
     if(!pscfile[idet]) continue;
     if(pscfile[idet]->IsOpen()) pscfile[idet]->Close();
   }

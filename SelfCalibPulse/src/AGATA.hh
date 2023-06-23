@@ -5,6 +5,8 @@
 #include <TMatrixD.h>
 #include <TFile.h>
 #include <TTree.h>
+#include <TH1.h>
+#include <TH2.h>
 #include <time.h>
 #include <vector>
 #include "TMath.h"
@@ -54,7 +56,7 @@ public:
   void WriteEvtHitsfiles(int detid);
   void Load(string configfile);
   void CombEvtHitsfiles();
-  void LoadEvtHitsfiles2(int iconfig);
+  void LoadEvtHitsfiles(int iconfig);
   void LoadEvtHitsconfigs();
   void ClearEvtHitsMem(); // clear EventHits in memory
 
@@ -83,14 +85,15 @@ public:
   void  CalcDevSigma();
 
   void  SetDivDir(int val){ DivDir=val;}
-  void  FindDivZone(PS *aps, PSC *apsc, vector<vector<int>> *divzone);
+  void  FindDivZone(PS *aps, PSC *apsc, int divdir, vector<vector<int>> *divzone);
   int   AddPStoDiv(PS *aps, Hit *ahit);
 
   int   CheckPSinPSC(PS *aps, Hit *ahit);
   void  SetNSigma(int val){ nSigma = val; cout<<Form("nSigma = %.1f",nSigma)<<endl;}
   float GetNSigma(){ return nSigma;}
 
-  void MakeCPulse();
+  void  ClearDivDir();
+  void  MakeCPulse();
   
   void  RemoveMotherPSC();
   void  RemoveSmallPSC(int minhits);
@@ -137,6 +140,7 @@ public:
 
   void SetMaxNDiv(int val){ maxndiv = val;}
   
+  void ClearSkipDetId(){ for(bool &val : SkipDet){ val=false;}}
   void SkipDetId(int val){ SkipDet[val]=true;}
 
 private:
@@ -149,28 +153,27 @@ private:
   
   // Pulse Shape Collection and Hit Collection
   TFile *pscfile[MaxNDets];
-  TTree *psctree[MaxNDets][NSeg];
+  TTree *psctree[MaxNDets][NSEGS];
 
-  int PSClimit[MaxNDets]; //PSC number limit
-  vector<PSC*>* fPSC[MaxNDets][NSeg]; // Pulse Shape Collection storage
-  vector<HitCollection*>* fHCs[MaxNDets][NSeg]; // Hit Collection storage
-  vector<Int_t> freeHCs[MaxNDets][NSeg]; // idx of empty fHCs
+  vector<PSC*>* fPSC[MaxNDets][NSEGS]; // Pulse Shape Collection storage
+  vector<HitCollection*>* fHCs[MaxNDets][NSEGS]; // Hit Collection storage
+  vector<Int_t> freeHCs[MaxNDets][NSEGS]; // idx of empty fHCs
   vector<HitCollection*>* fAllHCs; // Hit Collection storage
   atomic_int ihc;
-  mutex PSCmtx[MaxNDets][NSeg]; // fPSC lock for threads
+  mutex PSCmtx[MaxNDets][NSEGS]; // fPSC lock for threads
   mutex AllHCmtx;
   bool kAddNewPSC = true;
   float nSigma = 3.;
 
-  vector<Int_t> HCMap[MaxNDets][NSeg];
-  Int_t         HCstat[MaxNDets][NSeg][2]; // 0: fHCs size, 1: fHCs max idx
+  vector<Int_t> HCMap[MaxNDets][NSEGS];
+  Int_t         HCstat[MaxNDets][NSEGS][2]; // 0: fHCs size, 1: fHCs max idx
 
-  int DivDir = -1; // divide direction -1:all, 0:seg-core, 1:sector, 2:slice
+  int DivDir = -1; // divide direction -3:3-dir ind, -1:all, 0:seg-core, 1:sector, 2:slice
   
   // EventHits
   int nConfig = 0;
-  vector<int> MinRun;
-  vector<int> MaxRun;
+  vector<Config> fConfigs;
+
   vector<EventHits*>* fEventHits; //fHits in Events for tracking
   atomic_int atomrun;
   atomic<long long> ievt;
@@ -198,7 +201,7 @@ private:
   Double_t fitlimit; // boundary for the fit parameters
   
   // PSA to assign initial pos
-  vector<PSAbasis> fPSAbasis[NType][NSeg];
+  vector<PSAbasis> fPSAbasis[NType][NSEGS];
   
   // branch
   int   det;           // detector id
@@ -216,8 +219,8 @@ private:
   float dist;          // dist calpos - labpos
   float dist2;         // dist calpos2 - labpos
 
-  float spulse[NSegCore][NSig];  // average pulse shape
-  float devsigma[NSeg_comp];     // standard deviation of compared segment
+  float spulse[NCHAN][BSIZE];  // average pulse shape
+  float devsigma[NCOMP];       // standard deviation of compared segment
   
   int npaths;
 
@@ -239,6 +242,8 @@ private:
   atomic<long long> cHCs;
   atomic<long long> cPathsN[4];
   atomic<long long> maxndiv;
+
+  vector<TH1D *> hPSCstat;
 
   time_t start, stop;
 

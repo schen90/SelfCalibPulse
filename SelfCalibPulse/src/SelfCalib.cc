@@ -120,27 +120,6 @@ int main(int argc, char* argv[]){
 
   cout<<"\e[0m"<<endl;
 
-  // skip some detectors
-  vector<int> skipdetid;
-  skipdetid.push_back(9);   skipdetid.push_back(10);   skipdetid.push_back(11); // 03A 03B 03C not mounted
-  skipdetid.push_back(15);                                                      // 05A not connected
-  skipdetid.push_back(36);  skipdetid.push_back(37);   skipdetid.push_back(38); // 12A 12B 12C not mounted
-  skipdetid.push_back(42);  skipdetid.push_back(43);   skipdetid.push_back(44); // 14A 14B 14C not connected
-  if(skipdetid.size()>0){
-    cout<<"\e[1;31m Skip Det: ";
-    for(int idet : skipdetid){
-      int cluster = idet/3;
-      string detname = Form("%02d",cluster);
-      int itype   = idet%3;
-      if(itype==0) detname += "A ";
-      if(itype==1) detname += "B ";
-      if(itype==2) detname += "C ";
-      cout<<detname;
-    }
-    cout<<"\e[0m"<<endl;
-  }
-
-  
   // clock
   time_t start, stop;
   time_t stepstart, stepstop;
@@ -173,7 +152,6 @@ int main(int argc, char* argv[]){
     treereader = new TreeReaderPulse(Detid);
     treereader->Load(configfile);
     treereader->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
-    for(int idet : skipdetid) treereader->SkipDetId(idet);
   }
 
   // clear folders
@@ -185,7 +163,6 @@ int main(int argc, char* argv[]){
 
   // init AGATA
   AGATA *agata = new AGATA(Detid);  
-  for(int idet : skipdetid) agata->SkipDetId(idet);
   agata->SetMaxMemUsage(MaxMemoryUsage); //Max Memory Usage in %
   agata->SetPSA(kPSA);
 
@@ -207,14 +184,19 @@ int main(int argc, char* argv[]){
     printf("=== InitialHCs time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
 
     int ndiv = 0;
+    int DivDir;
     long long PSCstat[10];
     agata->CheckPSCstat(PSCstat);
     while(PSCstat[0]>MAXHITS){
       cout<<"\033[1;31m"<<"Divide "<<ndiv<<": \033[0m"<<endl;
 
-      int DivDir = ndiv%3;
-      if(DivDir<0) cout<<"divide in all direction..."<<endl;
-      else         cout<<"divide in direction "<<DivDir<<endl;
+      DivDir = (ndiv+2)%3;
+      //int DivDir = -3;
+      //if(ndiv==0) DivDir=2; else DivDir=-3;
+
+      if(DivDir==-1) cout<<"divide in all direction simultaneously..."<<endl;
+      if(DivDir==-3) cout<<"divide in all direction independently..."<<endl;
+      else           cout<<"divide in direction "<<DivDir<<endl;
       if(kConfig) agata->SetDivDir(DivDir);
       
       time(&stepstart);
@@ -234,6 +216,8 @@ int main(int argc, char* argv[]){
       time(&stepstop);
       printf("=== Remove PSC time: %.1f seconds ===\n\n",difftime(stepstop,stepstart));
       
+      //if(ndiv==0) agata->ClearDivDir(); // remove divdir
+
       agata->CheckPSCstat(PSCstat);
       cout<<"\033[1m"<<"PSC stats:"
 	  <<"  maxnhits = "<<PSCstat[0]

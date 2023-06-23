@@ -22,6 +22,9 @@ public:
 
   
 private:
+  const int fstep = 2; // mm fine grid
+  static const int GridMaxSteps = 50;
+
   int Detid = -1;
   
   bool kextrapol = true;

@@ -60,7 +60,7 @@ void PSbasis::ReadPSbasis(){
 
     Int_t dbsegi;
     Float_t dbposi[3];
-    Float_t dbspulsei[NSig*NSegCore];
+    Float_t dbspulsei[BSIZE*NCHAN];
 
     dbtree->SetBranchAddress("seg",&dbsegi);
     dbtree->SetBranchAddress("pos",dbposi);
@@ -77,24 +77,24 @@ void PSbasis::ReadPSbasis(){
 
     TMatrixD tmppos(3,1);
     int idx[3];
-    TMatrixD tmpspulse(NSig*NSegCore,1);
+    TMatrixD tmpspulse(BSIZE*NCHAN,1);
     for(int ipoint=0; ipoint<npoint; ipoint++){
       dbtree->GetEntry(ipoint);
 
       for(int i=0; i<3; i++){
         tmppos(i,0)=dbposi[i];
-        idx[i] = (int)((dbposi[i]-range[itype][i][0]) / GridDist + 0.5);
+        idx[i] = (int)((dbposi[i]-range[itype][i][0]) / fstep + 0.5);
         if(idx[i]<0 || idx[i]>=GridMaxSteps){
           cerr<<"grid point outside Map range!!!"<<endl;
           return;
         }
       }
 
-      for(int iseg=0; iseg<NSeg; iseg++){
-        for(int i=0; i<NSig; i++)
-          tmpspulse(iseg*NSig+i,0)=dbspulsei[iseg*NSig+i];
+      for(int iseg=0; iseg<NSEGS; iseg++){
+        for(int i=0; i<BSIZE; i++)
+          tmpspulse(iseg*BSIZE+i,0)=dbspulsei[iseg*BSIZE+i];
       }
-      for(int i=0; i<NSig; i++) tmpspulse(NSeg*NSig+i,0)=dbspulsei[NSeg*NSig+i];
+      for(int i=0; i<BSIZE; i++) tmpspulse(NSEGS*BSIZE+i,0)=dbspulsei[NSEGS*BSIZE+i];
 
       dbseg[itype].push_back(dbsegi); // start from 0
       dbpos[itype].push_back(tmppos);
@@ -118,7 +118,7 @@ Int_t PSbasis::GetPS(int itype, TMatrixD pos, double energy, int &seg, TMatrixD 
   
   int idx[3];
   for(int ix=0; ix<3; ix++){
-    idx[ix] = (int)((pos(ix,0)-range[itype][ix][0]) / GridDist + 0.5);
+    idx[ix] = (int)((pos(ix,0)-range[itype][ix][0]) / fstep + 0.5);
   }
 
   // find grid within 2mm cube

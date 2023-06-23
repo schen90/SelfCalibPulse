@@ -3,5 +3,6 @@ nsource 2
 source  511.0 0 0 0
 source 1274.6 0 0 0
 path G4Sim/rootfiles3/noPS_22Na
-run 0 3899
+run 0 4199
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
 nevt -1

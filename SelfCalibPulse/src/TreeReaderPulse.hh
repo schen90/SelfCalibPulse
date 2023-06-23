@@ -64,6 +64,7 @@ public:
 
   int GetRemovePSNumber(){ return cRemovePS;}
 
+  void ClearSkipDetId(){ for(bool &val : SkipDet){ val=false;}}
   void SkipDetId(int val){ SkipDet[val]=true;}
   
 private:
@@ -82,13 +83,7 @@ private:
   atomic_int cNotMatch;
 
   int nConfig = 0;
-  vector<int>              NSource;
-  vector<vector<float>>    fSourceE;
-  vector<vector<TVector3>> fSourcePos;
-  vector<string> path;
-  vector<int> MinRun;
-  vector<int> MaxRun;
-  vector<long long> Nevts;
+  vector<Config> fConfigs;
 
   Double_t MaxMemUsage = 50; // max memory usage %
 
@@ -137,9 +132,10 @@ private:
   mutex treemtx; // tree lock for threads read
   time_t start, stop;
 
-  // ScanPS
-  vector<PS> fPSs[3];
-  mutex scanmtx;
+  atomic<long long> cnevents; // counter for total events from all input files
+  atomic<long long> cievt; // counter for total analyzied events
+  atomic_int cievthitfind; // counter for ievthit find
+  atomic_int cievthitnotfind; // counter for ievthit not find
 
 };
 

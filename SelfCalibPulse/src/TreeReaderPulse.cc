@@ -27,9 +27,7 @@ using namespace std;
 TreeReaderPulse::TreeReaderPulse(int detid){
 
   Detid = detid;
-  for(int idet=0; idet<MaxNDets; idet++){
-    SkipDet[idet] = false;
-  }
+  ClearSkipDetId();
   
 #ifdef ADDPS
   apsb = new PSbasis(detid);
@@ -69,9 +67,12 @@ void TreeReaderPulse::Load(string configfile){
   while(!fin.eof()){
     fin.getline(buffer,500);
     if(strncmp(buffer,"#input",6)==0){
+      Config aconfig;
       int nsource = 0;
       vector<float>    tmpSE;
       vector<TVector3> tmpSPos;
+      vector<int>      tmpskip;
+      int tmpdetid;
       fin >> buffer >> nsource;
       for(int i=0; i<nsource; i++){
 	fin >> buffer >> sE >> spos[0] >> spos[1] >> spos[2];
@@ -80,15 +81,24 @@ void TreeReaderPulse::Load(string configfile){
       }
       fin >> buffer >> pathtmp;
       fin >> buffer >> run[0] >> run[1];
+      // skip det
+      fin >> buffer >> tmpdetid;
+      while(tmpdetid>-1){
+        tmpskip.push_back(tmpdetid);
+        fin >> tmpdetid;
+      }
       fin >> buffer >> nevt;
 
-      NSource.push_back(nsource);
-      fSourceE.push_back(tmpSE);
-      fSourcePos.push_back(tmpSPos);
-      path.push_back(pathtmp);
-      MinRun.push_back(run[0]);
-      MaxRun.push_back(run[1]);
-      Nevts.push_back(nevt);
+      aconfig.NSource    = nsource;
+      aconfig.fSourceE   = tmpSE;
+      aconfig.fSourcePos = tmpSPos;
+      aconfig.path       = pathtmp;
+      aconfig.MinRun     = run[0];
+      aconfig.MaxRun     = run[1];
+      aconfig.Nevts      = nevt;
+      aconfig.skipdetid  = tmpskip;
+
+      fConfigs.push_back(aconfig);
       nConfig++;
     }
   }
@@ -102,32 +112,50 @@ void TreeReaderPulse::Load(string configfile){
   
   cout<<"\e[1;33m find "<<nConfig<<" inputs:\e[0m"<<endl;
   for(int i=0; i<nConfig; i++){
-    cout<<"#input "<<i<<":  "<<NSource[i]<<" sources"<<endl;
-    for(int is=0; is<NSource[i]; is++){
+    cout<<"#input "<<i<<":  "<<fConfigs[i].NSource<<" sources"<<endl;
+    for(int is=0; is<fConfigs[i].NSource; is++){
       cout<<Form("     source %.1fkeV at %.2f %.2f %.2f",
-		 fSourceE[i][is],
-		 fSourcePos[i][is].X(),fSourcePos[i][is].Y(),fSourcePos[i][is].Z())<<endl;
+		 fConfigs[i].fSourceE[is],
+		 fConfigs[i].fSourcePos[is].X(),fConfigs[i].fSourcePos[is].Y(),fConfigs[i].fSourcePos[is].Z())<<endl;
     }
 
-    for(int run=MinRun[i]; run<=MaxRun[i]; run++){
-      fChain[0]->AddFile(Form("%s/G4SimData%04d.root",path[i].c_str(),run),0,"tree");
+    for(int run=fConfigs[i].MinRun; run<=fConfigs[i].MaxRun; run++){
+      fChain[0]->AddFile(Form("%s/G4SimData%04d.root",fConfigs[i].path.c_str(),run),0,"tree");
     }
 
     long long nentries = fChain[0]->GetEntriesFast();
     cout<<" find \e[1m"<<nentries<<"\e[0m events from rootfiles "
-	<<Form("%s/G4SimData%04d ~ %04d",path[i].c_str(),MinRun[i],MaxRun[i])<<endl;
+	<<Form("%s/G4SimData%04d ~ %04d",fConfigs[i].path.c_str(),fConfigs[i].MinRun,fConfigs[i].MaxRun)<<endl;
+
+    if(fConfigs[i].skipdetid.size()>0){
+      cout<<"\e[1;31m Skip Det: ";
+      for(int idet : fConfigs[i].skipdetid){
+        int cluster = idet/3;
+        string detname = Form("%02d",cluster);
+        int itype   = idet%3;
+        if(itype==0) detname += "A ";
+        if(itype==1) detname += "B ";
+        if(itype==2) detname += "C ";
+        cout<<detname;
+      }
+      cout<<"\e[0m"<<endl;
+    }
 
     fChain[0]->Reset();
   }
 
   // init fChain[0] for  #input 0
-  for(int run=MinRun[0]; run<=MaxRun[0]; run++){
-    fChain[0]->AddFile(Form("%s/G4SimData%04d.root",path[0].c_str(),run),0,"tree");
+  for(int run=fConfigs[0].MinRun; run<=fConfigs[0].MaxRun; run++){
+    fChain[0]->AddFile(Form("%s/G4SimData%04d.root",fConfigs[0].path.c_str(),run),0,"tree");
   }
   Init(0);
 
-  SourceE   = fSourceE[0];
-  SourcePos = fSourcePos[0];
+  SourceE   = fConfigs[0].fSourceE;
+  SourcePos = fConfigs[0].fSourcePos;
+
+  ClearSkipDetId();
+  for(int idet : fConfigs[0].skipdetid) SkipDetId(idet);
+
 }
 
 
@@ -156,7 +184,7 @@ void TreeReaderPulse::MakeNoise(){
   float tmpnoise;
   for(int i=0; i<NOISE; ){
     tmpnoise = gRandom->Uniform(-1,1);
-    for(int isig=0; isig<NSig; isig++){
+    for(int isig=0; isig<BSIZE; isig++){
       if(i>=NOISE) break;
       tmpnoise += -0.2*(tmpnoise+gRandom->Uniform(-10,10));
       noise[i] = noise0[i] = tmpnoise;
@@ -229,6 +257,11 @@ void TreeReaderPulse::Init(int i){
 
 // loop opt=0: generate initial PSC; opt=1: findmaxdev; opt=2: dividepsc
 void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata){
+  cnevents = 0;
+  cievt = 0;
+  cievthitfind = 0;
+  cievthitnotfind = 0;
+
   if     (opt==0) cout<<"\e[1;31m Generate initial PSC ... \e[0m"<<endl;
   else if(opt==1) cout<<"\e[1;31m Find Max Deviation ... \e[0m"<<endl;
   else if(opt==2) cout<<"\e[1;31m Divide PSC ... \e[0m"<<endl;
@@ -250,9 +283,73 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata){
 
   for(int i=0; i<nConfig; i++){
     cout<<"\e[1;32m"<<" #input "<<i<<"\e[0m"<<endl;
-    SourceE = fSourceE[i];
-    SourcePos = fSourcePos[i];
-    GenerateHCs(opt, agata, Nevts[i], i);
+    SourceE = fConfigs[i].fSourceE;
+    SourcePos = fConfigs[i].fSourcePos;
+    ClearSkipDetId();
+    for(int idet : fConfigs[i].skipdetid) SkipDetId(idet);
+
+    GenerateHCs(opt, agata, fConfigs[i].Nevts, i);
+  }
+
+  cout<<endl<<"\e[1;32m"<<" #input 0 ~ "<<nConfig-1<<"\e[0m"<<endl;
+  long long PSCstat[10];
+  agata->GetPSCstat(PSCstat);
+  double MemUsageGB = GetCurrentMemoryUsage()/GB;
+  double MemTotalGB = GetTotalSystemMemory()/GB;
+  double MemUsage = MemUsageGB / MemTotalGB * 100;
+
+  if(opt==0){ // initial PSC
+    cout<<"\r finish read "<<cievt<<" / "<<cnevents<<" evts"
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	<<"PS-"<<PSCstat[0]
+	<<" PSC-"<<PSCstat[1]
+	<<" maxnhits-"<<PSCstat[4]<<".."
+	<<"fEventHits-"<<NEventHits<<".."<<endl;
+
+  }else if(opt==1){ // find max dev
+    cout<<"\r finish read "<<cievt<<" / "<<cnevents<<" evts"
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	<<"PS-"<<PSCstat[0]
+	<<" PSC-"<<PSCstat[1]
+	<<" maxnhits-"<<PSCstat[4]<<".."
+	<<"MaxDev-"<<Form("%.2f",(float)MaxDev)<<".."<<endl;
+    cout<<" find iEvtHit: "<<cievthitfind
+        <<"   Not find iEvtHit: "<<cievthitnotfind<<endl;
+
+  }else if(opt==2){ // divide PSC
+    cout<<"\r finish read "<<cievt<<" / "<<cnevents<<" evts"
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	<<"PS-"<<PSCstat[0]
+	<<" PSC-"<<PSCstat[1]
+	<<" DivPS-"<<cDivPS<<" NotMatch-"<<cNotMatch<<".."
+	<<" maxnhitsdiv-"<<maxnhitsdiv
+	<<" maxndiv-"<<PSCstat[8]<<".."<<endl;
+    cout<<" find iEvtHit: "<<cievthitfind
+        <<"   Not find iEvtHit: "<<cievthitnotfind<<endl;
+
+  }else if(opt==3){ // find dev sigma
+    cout<<"\r finish read "<<cievt<<" / "<<cnevents<<" evts"
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	<<"PS-"<<PSCstat[0]
+	<<" PSC-"<<PSCstat[1]
+	<<" maxnhits-"<<PSCstat[4]<<".."<<endl;
+    cout<<" find iEvtHit: "<<cievthitfind
+        <<"   Not find iEvtHit: "<<cievthitnotfind<<endl;
+
+  }else if(opt==4){ // remove PS
+    cout<<"\r finish read "<<cievt<<" / "<<cnevents<<" evts"
+	<<Form("(%.0fs/10kevts)..",difftime(stop,start)/10.)
+	<<"Mem "<<Form("%.1f/%.1f",MemUsageGB,MemTotalGB)<<"GB.."
+	<<"PS-"<<PSCstat[0]
+	<<" PSC-"<<PSCstat[1]
+	<<" RemovePS-"<<cRemovePS<<" NotMatch-"<<cNotMatch<<".."<<endl;
+    cout<<" find iEvtHit: "<<cievthitfind
+        <<"   Not find iEvtHit: "<<cievthitnotfind<<endl;
+
   }
 
   
@@ -305,17 +402,18 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
   
   // statistics in total
   fChain[0]->Reset();
-  for(int run=MinRun[iconfig]; run<=MaxRun[iconfig]; run++){
-    fChain[0]->AddFile(Form("%s/G4SimData%04d.root",path[iconfig].c_str(),run),0,"tree");
+  for(int run=fConfigs[iconfig].MinRun; run<=fConfigs[iconfig].MaxRun; run++){
+    fChain[0]->AddFile(Form("%s/G4SimData%04d.root",fConfigs[iconfig].path.c_str(),run),0,"tree");
   }
   Init(0);
 
   long long nentries = fChain[0]->GetEntriesFast();
   if(nevts>0) nentries = TMath::Min(nentries,nevts);
-  irun = MinRun[iconfig];
+  cnevents += nentries;
+  irun = fConfigs[iconfig].MinRun;
   ievt = 0;
 
-  cout<<"\e[1;33m Read "<<nentries<<" events from rootfiles "<<Form("%s/G4SimData%04d ~ %04d",path[iconfig].c_str(),MinRun[iconfig],MaxRun[iconfig])<<" ... \e[0m"<<endl;
+  cout<<"\e[1;33m Read "<<nentries<<" events from rootfiles "<<Form("%s/G4SimData%04d ~ %04d",fConfigs[iconfig].path.c_str(),fConfigs[iconfig].MinRun,fConfigs[iconfig].MaxRun)<<" ... \e[0m"<<endl;
 
   // Loop entries-------------------------------------------
 #ifndef NTHREADS
@@ -338,6 +436,7 @@ void TreeReaderPulse::GenerateHCs(int opt, AGATA *agata, long long nevts, int ic
 #endif
 
   // output final statistics
+  cievt += ievt;
   NEventHits = agata->GetEventHitsSize();
   
   time(&stop);
@@ -406,21 +505,21 @@ void TreeReaderPulse::GenerateHCsLoop(int opt, int iconfig, int iChain, AGATA *a
 
   long long istart = 0;
   int run;
-  for(; irun<=MaxRun[iconfig]; ){ //loop runs
+  for(; irun<=fConfigs[iconfig].MaxRun; ){ //loop runs
     if(kInterrupt) break;
 
     {
 #ifdef NTHREADS
       lock_guard<mutex> lock(treemtx); // lock tree read
 #endif
-      if(irun>MaxRun[iconfig]) return;
+      if(irun>fConfigs[iconfig].MaxRun) return;
       run = irun;
       irun++;
     }
 
     // initial tree
     fChain[iChain]->Reset();
-    fChain[iChain]->AddFile(Form("%s/G4SimData%04d.root",path[iconfig].c_str(),run),0,"tree");
+    fChain[iChain]->AddFile(Form("%s/G4SimData%04d.root",fConfigs[iconfig].path.c_str(),run),0,"tree");
     int nentrytmp = fChain[iChain]->GetEntriesFast();
     Init(iChain);
 
@@ -546,7 +645,7 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
     int tmpnidx = -1, tmpnidxshift = 0;
 #ifdef NOISE
     tmpnidx = (int)gRandom->Uniform(0,NOISE);
-    tmpnidxshift = (int)gRandom->Uniform(0,NOISE/(NSig*NSegCore));
+    tmpnidxshift = (int)gRandom->Uniform(0,NOISE/(BSIZE*NCHAN));
 #endif
     int segidx = -1;
     PS aps = GetAPS(iChain,agata,idet,tmpnidx,tmpnidxshift,false,segidx); // aps w/ PS
@@ -740,11 +839,30 @@ void TreeReaderPulse::GenerateHCsworker(int iconfig, int run, int iChain, AGATA 
 void TreeReaderPulse::FindDevworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
 				    int ientry, long long nentries, long long &istart){
 
-  if(ievt>=nentries) return;
-  
+  {
+#ifdef NTHREADS
+    lock_guard<mutex> lock(treemtx); // lock tree read
+#endif
+    if(ievt>=nentries) return;
+    if(ientry>=nentries) return;  
+
+    ievt++;
+  }
+  fChain[iChain]->GetEntry(ientry);
+
+  bool kFindDet = false;
+  for(int idet=0; idet<obj[iChain].pdet->size(); idet++){
+    if(obj[iChain].pdet->at(idet)==Detid) kFindDet = true;
+  }
+
+  if(Detid<0) kFindDet = true; // all det selected
+
+  if(!kFindDet) return;
+
   // find Hit-----------------------------------------------
   long long iEvtHit = agata->FindiEvtHit(iconfig, run, ientry, istart);
-  if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return;}
+  if(iEvtHit<0 || iEvtHit>NEventHits-1){  cievthitnotfind++; return;}
+  cievthitfind++;
 
   vector<Hit*>* fHits = agata->FindEventHits(iEvtHit)->GetfHits();
   istart = iEvtHit;
@@ -759,22 +877,11 @@ void TreeReaderPulse::FindDevworker(int opt, int iconfig, int run, int iChain, A
     if(kFindPS) break;
   }
   
-  if(!kFindPS){ ievt++; return;}
+  if(!kFindPS){ return;}
 
   // find corresponding fPS
-  vector<PS> fPS;
-  {
-#ifdef NTHREADS
-    lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-    if(ievt>=nentries) return;
-    if(ientry>=nentries) return;  
-
-    ievt++;
-  }
-  fChain[iChain]->GetEntry(ientry);
-
   int ihit = 0;
+  vector<PS> fPS;
   for(int idet=0; idet<obj[iChain].pdet->size(); idet++){ //loop dets
     int detid = obj[iChain].pdet->at(idet);
 
@@ -831,11 +938,30 @@ void TreeReaderPulse::FindDevworker(int opt, int iconfig, int run, int iChain, A
 void TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain, AGATA *agata,
 				      int ientry, long long nentries, long long &istart){
 
-  if(ievt>=nentries) return;
+  {
+#ifdef NTHREADS
+    lock_guard<mutex> lock(treemtx); // lock tree read
+#endif
+    if(ievt>=nentries) return;
+    if(ientry>=nentries) return;  
+
+    ievt++;
+  }
+  fChain[iChain]->GetEntry(ientry);
+
+  bool kFindDet = false;
+  for(int idet=0; idet<obj[iChain].pdet->size(); idet++){
+    if(obj[iChain].pdet->at(idet)==Detid) kFindDet = true;
+  }
+
+  if(Detid<0) kFindDet = true; // all det selected
+
+  if(!kFindDet) return;
   
   // find Hit-----------------------------------------------
   long long iEvtHit = agata->FindiEvtHit(iconfig, run, ientry, istart);
-  if(iEvtHit<0 || iEvtHit>NEventHits-1){ ievt++; return;}
+  if(iEvtHit<0 || iEvtHit>NEventHits-1){  cievthitnotfind++; return;}
+  cievthitfind++;
 
   EventHits *fEvent = agata->FindEventHits(iEvtHit);
   vector<Hit*>* fHits = fEvent->GetfHits();
@@ -928,22 +1054,11 @@ void TreeReaderPulse::UpdateHCsworker(int opt, int iconfig, int run, int iChain,
     if(kFindPS) break;
   }
   
-  if(!kFindPS){ ievt++; return;}
+  if(!kFindPS){ return;}
 
   // find corresponding fPS
-  vector<PS> fPS;
-  {
-#ifdef NTHREADS
-    lock_guard<mutex> lock(treemtx); // lock tree read
-#endif
-    if(ievt>=nentries) return;
-    if(ientry>=nentries) return;  
-
-    ievt++;
-  }
-  fChain[iChain]->GetEntry(ientry);
-
   int ihit = 0;
+  vector<PS> fPS;
   for(int idet=0; idet<obj[iChain].pdet->size(); idet++){ //loop dets
     int detid = obj[iChain].pdet->at(idet);
 
@@ -1024,7 +1139,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   vector<vector<float>> simdetpos;
 
 #ifdef ADDPS
-  TMatrixD              simspulse(NSig*NSegCore,1);
+  TMatrixD              simspulse(BSIZE*NCHAN,1);
 #endif
   for(int i=0; i<obj[iChain].inter->at(idet).size(); i++){
     int interid = obj[iChain].inter->at(idet)[i];
@@ -1053,7 +1168,7 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
       for(int ix=0; ix<3; ix++) tmppos(ix,0) = tmpdetpos[ix];
       double tmpenergy = tmphiteng[0];
       int tmpseg;
-      TMatrixD tmpspulse(NSig*NSegCore,1);
+      TMatrixD tmpspulse(BSIZE*NCHAN,1);
       int tmpngrid = apsb->GetPS(itype, tmppos, tmpenergy, tmpseg, tmpspulse);
       if(tmpseg!=obj[iChain].pseg->at(idet)[i]){
 	cerr<<"segment not match!!! tmpseg = "<<tmpseg
@@ -1122,34 +1237,34 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
   if(skipPS || segidx>-1) return aps; // skip PS
   
 #ifdef ADDPS
-  for(int iseg=0; iseg<NSegCore; iseg++){
-    for(int isig=0; isig<NSig; isig++){
-      double tmpamp = simspulse(iseg*NSig+isig,0);
+  for(int iseg=0; iseg<NCHAN; iseg++){
+    for(int isig=0; isig<BSIZE; isig++){
+      double tmpamp = simspulse(iseg*BSIZE+isig,0);
       aps.opulse[iseg][isig] = tmpamp/simeng[0];
     }
   }
   
 #else
   // read segments
-  for(int iseg=0; iseg<NSeg; iseg++){
-    for(int isig=0; isig<NSig; isig++){
-      double tmpamp = obj[iChain].spulse->at(idet)[iseg*NSig+isig];
+  for(int iseg=0; iseg<NSEGS; iseg++){
+    for(int isig=0; isig<BSIZE; isig++){
+      double tmpamp = obj[iChain].spulse->at(idet)[iseg*BSIZE+isig];
       aps.opulse[iseg][isig] = tmpamp/simeng[0];
     }
   }
 
   // read core
-  for(int isig=0; isig<NSig; isig++){
+  for(int isig=0; isig<BSIZE; isig++){
     double tmpamp = obj[iChain].core->at(idet)[isig];
-    aps.opulse[NSegCore-1][isig] = tmpamp/simeng[0];
+    aps.opulse[NCHAN-1][isig] = tmpamp/simeng[0];
   }
 #endif
 
 #ifdef NOISE
   if(nidx>=0){
     // add noise
-    for(int iseg=0; iseg<NSegCore; iseg++){
-      for(int isig=0; isig<NSig; isig++){
+    for(int iseg=0; iseg<NCHAN; iseg++){
+      for(int isig=0; isig<BSIZE; isig++){
 	nidx = nidx%NOISE;
 	aps.opulse[iseg][isig] += noise[nidx]/simeng[0];
 	nidx++;
@@ -1158,6 +1273,15 @@ PS TreeReaderPulse::GetAPS(int iChain, AGATA *agata, int idet, int nidx, int nid
     }
   }
 #endif
+
+  // partial pulse shape for comparison
+  int fseg[NCOMP];
+  agata->GetGeo()->GetNextSegs(aps.seg, fseg);
+
+  for(int is=0; is<NCOMP; is++){
+    int iseg = fseg[is];
+    copy_n(aps.opulse[iseg], BSIZE, aps.cpulse[is]);
+  }
 
   return aps;
 }

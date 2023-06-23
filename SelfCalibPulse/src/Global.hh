@@ -27,26 +27,33 @@ using namespace std;
 //#define CHECKTRACK // check track using OFT tacking
 //#define SINGLEHIT
 #define ADDPS // input G4Tree noPS, addPS from db
-//#define NOISE 1000000
-#define PSCEMIN 200. // keV, PSC greate with PS CoreEnergy > PSCEMIN
+#define NOISE 1000000
+#define PSCEMIN 300. // keV, PSC greate with PS CoreEnergy > PSCEMIN
 #define MINHITS 10    // min nhits for a good HC
 #define MAXHITS 1000  // max nhit for a HC
 #define SHORT
 
 // agata
-#define NType 3
-#define GridDist 2. // 2mm grid
-#define GridMaxSteps 50
-#define MaxNDets 180
-#define NSli 6
-#define NSec 6
-#define NSeg 36
-#define NSegCore 37
-#define NSeg_comp 6
-#define NSig 56
-#define NSig_comp 56
-#define LOOP_SSE4_seg 14
-#define LOOP_SSE8_seg 7
+const int MaxNDets = 180;
+const int NType = 3;
+const int NSLIC = 6;
+const int NSECT = 6;
+const int NSEGS = NSLIC*NSECT;
+const int NCHAN = NSEGS + 1;
+const int INDCC = NCHAN - 1;  // 36 index of CC
+const int TSTEP = 10; // time step of the experimental data and of the internal basis signals (ns)
+
+const int BSIZE = 56; // number of points of the internal basis
+const int BZERO =  0; // "T=0" sample of the calculated traces
+
+const int DSIZE = 60; // length of experimental data
+const int DZERO = 11; // "T=0" sample of the experimental traces
+
+const int NCOMP = 6;
+
+const int LOOP_SAMP = 40;
+const int LOOP_4SSE = LOOP_SAMP/4;
+const int LOOP_8SSE = LOOP_SAMP/8;
 
 //#define SSE_M256
 #define CHI2        3
@@ -85,7 +92,8 @@ struct PS{
   float labpos[3]; // lab position
   float detpos[3]; // det position
 
-  float opulse[NSegCore][NSig]; // original pulse shape
+  float opulse[NCHAN][BSIZE];   // original pulse shape
+  float cpulse[NCOMP][BSIZE];  // adapted pulse shape for comparison
 };
 
 typedef struct PS PS;
@@ -93,9 +101,23 @@ typedef struct PS PS;
 // structure for PSA basis
 struct PSAbasis{
   float pos[3];                  // pos in det frame
-  float spulse[NSeg_comp][NSig]; // pulse shape for comparison
+  float spulse[NCOMP][BSIZE]; // pulse shape for comparison
 };
 
 typedef struct PSAbasis PSAbasis;
+
+
+// structure for configfile
+struct Config{
+  int              NSource;
+  vector<float>    fSourceE;
+  vector<TVector3> fSourcePos;
+  string           path;
+  int              MinRun;
+  int              MaxRun;
+  long long        Nevts;
+  vector<int>      skipdetid;
+};
+
 
 #endif // ifndef GLOBAL_HH
