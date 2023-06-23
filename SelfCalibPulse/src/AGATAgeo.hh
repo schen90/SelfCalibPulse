@@ -38,12 +38,15 @@ public:
   void GetChi2sLimit(int detid, const double *dpos, float chi2slimit[]);
 
 private:
+  const int fstep = 2; // mm fine grid
+  static const int GridMaxSteps = 50;
+
   // grid pos and seg
   double GridRange[NType][3][2];
   int gridimap[NType][GridMaxSteps][GridMaxSteps][GridMaxSteps];
   vector<Int_t> GridSeg[NType];
-  Int_t    NSegGrid[NType][NSeg];
-  TMatrixD LocalSegPos[NType][NSeg];
+  Int_t    NSegGrid[NType][NSEGS];
+  TMatrixD LocalSegPos[NType][NSEGS];
 
   float gridchi2smap[NType][GridMaxSteps][GridMaxSteps][GridMaxSteps][3];
 
@@ -53,12 +56,12 @@ private:
   TMatrixD Tr[MaxNDets];
 
   // segment position
-  TMatrixD SegPos[MaxNDets][NSeg];
+  TMatrixD SegPos[MaxNDets][NSEGS];
 
   // neighbor segment
-  Int_t NextSec[NSeg][2]; // next sector
-  Int_t NextSli[NSeg][2]; // next slice
-  Float_t SegWeight[NSeg][NSegCore]; // weight in comparison
+  Int_t NextSec[NSEGS][2]; // next sector
+  Int_t NextSli[NSEGS][2]; // next slice
+  Float_t SegWeight[NSEGS][NCHAN]; // weight in comparison
   
   Int_t NDets; // number of detectors from LookUpTable
 

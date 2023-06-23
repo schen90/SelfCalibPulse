@@ -1,0 +1,71 @@
+#input 0
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0008
+run 0 53
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1
+
+#input 1
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0009
+run 0 16
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1
+
+#input 2
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0010
+run 0 79
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1
+
+#input 3
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0011
+run 0 39
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1
+
+#input 4
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0012
+run 0 50
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1
+
+#input 5
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0013
+run 0 49
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1
+
+#input 6
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0014
+run 0 71
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1
+
+#input 7
+nsource 2
+source  511.0 0 0 0
+source 1274.6 0 0 0
+path Calib/src23/run_0015
+run 0 63
+skipdet 9 10 11 15 36 37 38 42 43 44 -1
+nevt -1

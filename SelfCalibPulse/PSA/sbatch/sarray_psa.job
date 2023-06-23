@@ -1,0 +1,27 @@
+#!/bin/bash
+#SBATCH --job-name=PSA                        # Job name
+#SBATCH --mail-type=END,FAIL                  # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=sidong.chen@york.ac.uk    # Where to send mail
+#SBATCH --ntasks=1                            # Run on a single CPU
+#SBATCH --cpus-per-task=1                     # ...with two cores
+#SBATCH --mem=25gb                            # Job memory request
+#SBATCH --time=06:00:00                       # Time limit hrs:min:sec
+#SBATCH --output=log/PSA_%A_%a.log            # Standard output and error log
+#SBATCH --account=phys-agata-2022             # Project account
+#SBATCH --array=0-79%20                       # Array range
+#SBATCH --partition=himem                     # Select nodes
+
+runNo=10
+itree=$SLURM_ARRAY_TASK_ID
+
+echo My working directory is `pwd`
+echo Running array job index $SLURM_ARRAY_TASK_ID, on host:
+echo -e '\t'`hostname` at `date`
+echo
+
+module load devel/CMake/3.16.4-GCCcore-9.3.0 phys/Geant4/10.05.p01-foss-2020a phys/ROOT/6.22.02-foss-2020a-Python-3.8.2
+
+./AnaData_LibTrap tracefiles/run_$(printf "%04d" $runNo)/Tree_$(printf "%04d" $itree).root psafiles/run_$(printf "%04d" $runNo)/Tree_$(printf "%04d" $itree).root
+
+echo
+echo Job completed at `date`

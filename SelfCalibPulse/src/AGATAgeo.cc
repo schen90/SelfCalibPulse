@@ -49,7 +49,7 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
       for(int iz=0; iz<GridMaxSteps; iz++)
 	gridimap[itype][ix][iy][iz] = -1;
 
-  for(int iseg=0; iseg<NSeg; iseg++){
+  for(int iseg=0; iseg<NSEGS; iseg++){
     NSegGrid[itype][iseg] = 0;
     LocalSegPos[itype][iseg].ResizeTo(3,1); LocalSegPos[itype][iseg].Zero();
   }
@@ -90,7 +90,7 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
 
     for(int i=0; i<3; i++){
       tmppos(i,0)=gridposi[i];
-      idx[i] = (int)((gridposi[i]-GridRange[itype][i][0]) / GridDist + 0.5);
+      idx[i] = (int)((gridposi[i]-GridRange[itype][i][0]) / fstep + 0.5);
       if(idx[i]<0 || idx[i]>=GridMaxSteps){
 	cerr<<"grid point outside Map range!!!"<<endl;
 	return;
@@ -106,7 +106,7 @@ void AGATAgeo::LoadGrid(Int_t itype, string gridfile){
 
   cout<<"load "<<npoint<<" points from "<<gridfile<<" for type "<<itype<<endl;
 
-  for(int iseg=0; iseg<NSeg; iseg++){
+  for(int iseg=0; iseg<NSEGS; iseg++){
     if(NSegGrid[itype][iseg]>0)
       LocalSegPos[itype][iseg] = 1./NSegGrid[itype][iseg] * LocalSegPos[itype][iseg];
   }
@@ -177,7 +177,7 @@ void AGATAgeo::MakeSegPos(){
   int detid, segid;
   for(int detid=0; detid<NDets; detid++){
     int itype = detid%3;
-    for(int iseg=0; iseg<NSeg; iseg++){
+    for(int iseg=0; iseg<NSEGS; iseg++){
       SegPos[detid][iseg].ResizeTo(3,1);
       SegPos[detid][iseg] = Det2LabPos(detid,LocalSegPos[itype][iseg]);
     }
@@ -191,25 +191,25 @@ void AGATAgeo::MakeSegPos(){
 void AGATAgeo::MakeSegmentMap(){
   cout<<"Make Segment Map..";
   //cout<<"\e[1;32m assign weight for comparison hitseg-1, core-1, nxsec-1, nxsli-1 \e[0m"<<endl;
-  for(int iseg=0; iseg<NSeg; iseg++){
+  for(int iseg=0; iseg<NSEGS; iseg++){
     NextSec[iseg][0] = NextSec[iseg][1] = -1;
     NextSli[iseg][0] = NextSli[iseg][1] = -1;
     int NextSli2 = -1;
     
-    int isec = iseg/NSli;
-    int isli = iseg%NSli;
+    int isec = iseg/NSLIC;
+    int isli = iseg%NSLIC;
 
-    for(int jseg=0; jseg<NSeg; jseg++){
+    for(int jseg=0; jseg<NSEGS; jseg++){
 
       if(jseg==iseg) continue;
 
-      int jsec = jseg/NSli;
-      int jsli = jseg%NSli;
+      int jsec = jseg/NSLIC;
+      int jsli = jseg%NSLIC;
 
       int distV = abs(jsli - isli);
       int distH = abs(jsec - isec);
-      distH = min(distH, abs(jsec - isec + NSec));
-      distH = min(distH, abs(jsec - isec - NSec));
+      distH = min(distH, abs(jsec - isec + NSECT));
+      distH = min(distH, abs(jsec - isec - NSECT));
 
       if(distV==0 && distH==1){
 	if(NextSec[iseg][0]<0) NextSec[iseg][0] = jseg;
@@ -231,22 +231,22 @@ void AGATAgeo::MakeSegmentMap(){
   cout<<"assign segment weight..";
   // assign weight for comparison
   //cout<<"\e[1;32m assign weight for comparison hitseg-1, core-1, nxsec-1, nxsli-1 \e[0m"<<endl;
-  for(int iseg=0; iseg<NSeg; iseg++){
+  for(int iseg=0; iseg<NSEGS; iseg++){
     /*
-    for(int iiseg=0; iiseg<NSeg; iiseg++)
+    for(int iiseg=0; iiseg<NSEGS; iiseg++)
       SegWeight[iseg][iiseg] = 0;
 
     SegWeight[iseg][iseg] = 1;
-    SegWeight[iseg][NSegCore-1] = 1;
+    SegWeight[iseg][INDCC] = 1;
     SegWeight[iseg][NextSec[iseg][0]] = 1;    SegWeight[iseg][NextSec[iseg][1]] = 1;
     SegWeight[iseg][NextSli[iseg][0]] = 1;    SegWeight[iseg][NextSli[iseg][1]] = 1;
     */
 
-    for(int iiseg=0; iiseg<NSegCore; iiseg++)
+    for(int iiseg=0; iiseg<NCHAN; iiseg++)
       SegWeight[iseg][iiseg] = 1;
 
     //SegWeight[iseg][iseg] = 0; // remove direct hit seg
-    //SegWeight[iseg][NSegCore-1] = 0; // remove core
+    //SegWeight[iseg][INDCC] = 0; // remove core
   }
   cout<<endl;
 
@@ -256,23 +256,23 @@ void AGATAgeo::MakeSegmentMap(){
 
 void AGATAgeo::GetNextSegs(Int_t iseg, Int_t *fseg){
   fseg[0] = iseg;
-  fseg[1] = NSegCore-1;
+  fseg[1] = INDCC;
   fseg[2] = NextSec[iseg][0];
   fseg[3] = NextSec[iseg][1];
   fseg[4] = NextSli[iseg][0];
   fseg[5] = NextSli[iseg][1];
 
-#if NSeg_comp == 37
-  int idx = 6;
-  int uflg[NSeg_comp]; for(int i=0; i<NSeg_comp; i++) uflg[i]=0;
-  for(int i=0; i<idx; i++) uflg[fseg[i]]=1;
-  for(int i=0; i<NSegCore && idx<NSeg_comp; i++){
-    if(uflg[i]==1) continue;
-    fseg[idx] = i;
-    idx++;
-    uflg[i]=1;
+  if( NCOMP == 37){
+    int idx = 6;
+    int uflg[NCOMP]; for(int i=0; i<NCOMP; i++) uflg[i]=0;
+    for(int i=0; i<idx; i++) uflg[fseg[i]]=1;
+    for(int i=0; i<NCHAN && idx<NCOMP; i++){
+      if(uflg[i]==1) continue;
+      fseg[idx] = i;
+      idx++;
+      uflg[i]=1;
+    }
   }
-#endif
   
   return;
 }
@@ -284,9 +284,11 @@ bool AGATAgeo::CheckBounds(int detid, int segid, const double *lpos){
   for(int ix=0; ix<3; ix++) LPos(ix,0) = lpos[ix];
   TMatrixD DPos = Lab2DetPos(detid, LPos);
 
+  if(DPos(2,0)<0 || DPos(2,0)>90) return false;
+
   int idx[3];
   for(int ix=0; ix<3; ix++){
-    idx[ix] = (int)((DPos(ix,0)-GridRange[itype][ix][0]) / GridDist + 0.5);
+    idx[ix] = (int)((DPos(ix,0)-GridRange[itype][ix][0]) / fstep + 0.5);
     if(idx[ix]<0 || idx[ix]>GridMaxSteps-1) return false;
   }
 
@@ -304,7 +306,7 @@ void AGATAgeo::GetChi2sLimit(int detid, const double *dpos, float chi2slimit[]){
 
   int idx[3];
   for(int ix=0; ix<3; ix++){
-    idx[ix] = (int)((dpos[ix]-GridRange[itype][ix][0]) / GridDist + 0.5);
+    idx[ix] = (int)((dpos[ix]-GridRange[itype][ix][0]) / fstep + 0.5);
     if(idx[ix]<0 || idx[ix]>GridMaxSteps-1) return;
   }
 
